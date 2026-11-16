@@ -18,8 +18,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, get_current_user_media, get_db
-from app.models import Job, User
+from app.autenticacion.auth import get_current_user, get_current_user_media, get_db
+from app.persistencia.models import Job, User
 
 # Cargar variables de entorno
 load_dotenv()

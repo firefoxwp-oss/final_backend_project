@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.models import Job, Media
+from app.persistencia.models import Job, Media
 
 
 def _ahora():
@@ -64,7 +64,11 @@ class ColaTrabajos:
         )
         self.db.commit()
 
-    def marcar_terminado(self, job: Job, video_type: str) -> None:
+    def marcar_terminado(self, job: Job, archivos: list, video_type: str) -> None:
+        """Cierra el trabajo solo si existen todos sus archivos obligatorios."""
+        faltantes = [p for p in archivos if not os.path.exists(p)]
+        if faltantes:
+            raise RuntimeError(f"Faltan archivos generados: {', '.join(faltantes)}")
         job.video_type = video_type
         job.status = "done"
         job.stage = "completado"

@@ -7,7 +7,9 @@ distintos pero comparten la carpeta `media/`.
 import os
 import subprocess
 
-DIR_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIR_PROYECTO = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 
 DIR_VIDEOS = os.path.join("media", "videos")
 DIR_AUDIOS = os.path.join("media", "audios")

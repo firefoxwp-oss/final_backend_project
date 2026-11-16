@@ -7,8 +7,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from .database import SessionLocal
-from .models import User
+from app.persistencia.database import SessionLocal
+from app.persistencia.models import User
 
 # Configuracion
 _DEFAULT_SECRET = "your-super-secret-key-change-in-production"

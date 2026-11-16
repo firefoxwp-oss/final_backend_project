@@ -85,7 +85,7 @@ def main():
         sys.exit(2)
 
     try:
-        project_root = Path(__file__).resolve().parents[1]
+        project_root = Path(__file__).resolve().parents[2]
         if str(project_root) not in sys.path:
             sys.path.insert(0, str(project_root))
 
@@ -95,7 +95,7 @@ def main():
         import torch
         import whisperx
 
-        from app.subtitles import segundos_a_tiempo_srt
+        from app.subtitulos.subtitles import segundos_a_tiempo_srt
 
         device = (
             args.device

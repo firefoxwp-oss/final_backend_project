@@ -9,7 +9,7 @@ User=ubuntu
 WorkingDirectory=/opt/karaoke/final_backend_project
 EnvironmentFile=/opt/karaoke/final_backend_project/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/karaoke/final_backend_project/venv/bin/python -m app.trabajador
+ExecStart=/opt/karaoke/final_backend_project/venv/bin/python -m app.cola.trabajador
 Restart=always
 RestartSec=5
 TimeoutStopSec=30
