@@ -18,7 +18,8 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
-# Valores permitidos (los mismos que las restricciones CHECK de la base de datos)
+# Valores permitidos (los mismos que las restricciones CHECK de la base
+# de datos)
 ESTADOS_JOB = ("queued", "running", "done", "error", "cancelled")
 TIPOS_VIDEO = ("karaoke", "instrumental")
 MODELOS_SEPARACION = ("demucs", "spleeter")
@@ -58,11 +59,15 @@ class Media(Base):
     format = Column(String(10), nullable=False)
     type = Column(String(25), nullable=False)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=_utcnow,
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
         server_default=func.now(),
     )
 
-    __table_args__ = (CheckConstraint(_en("type", TIPOS_MEDIA), name="ck_media_type"),)
+    __table_args__ = (
+        CheckConstraint(_en("type", TIPOS_MEDIA), name="ck_media_type"),
+    )
 
 
 class User(Base):
@@ -73,10 +78,14 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     password = Column(String(255), nullable=False)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=_utcnow,
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
         server_default=func.now(),
     )
-    projects = relationship("Project", back_populates="user", cascade="all, delete")
+    projects = relationship(
+        "Project", back_populates="user", cascade="all, delete"
+    )
 
 
 class Project(Base):
@@ -85,9 +94,13 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=_utcnow,
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
         server_default=func.now(),
     )
 
@@ -117,7 +130,9 @@ class Job(Base):
         nullable=True,
     )
     source_filename = Column(String(255), nullable=False)
-    status = Column(String(10), nullable=False, default="queued", server_default="queued")
+    status = Column(
+        String(10), nullable=False, default="queued", server_default="queued"
+    )
     stage = Column(String(30), nullable=True)
     progress = Column(Integer, nullable=False, default=0, server_default="0")
     video_type = Column(String(12), nullable=True)
@@ -125,7 +140,9 @@ class Job(Base):
     duration_seconds = Column(Integer, nullable=True)
     error = Column(Text, nullable=True)
     created_at = Column(
-        DateTime(timezone=True), nullable=False, default=_utcnow,
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
         server_default=func.now(),
     )
     started_at = Column(DateTime(timezone=True), nullable=True)
@@ -133,9 +150,12 @@ class Job(Base):
 
     __table_args__ = (
         CheckConstraint(_en("status", ESTADOS_JOB), name="ck_jobs_status"),
-        CheckConstraint(_en("video_type", TIPOS_VIDEO), name="ck_jobs_video_type"),
         CheckConstraint(
-            _en("separation_model", MODELOS_SEPARACION), name="ck_jobs_separation_model"
+            _en("video_type", TIPOS_VIDEO), name="ck_jobs_video_type"
+        ),
+        CheckConstraint(
+            _en("separation_model", MODELOS_SEPARACION),
+            name="ck_jobs_separation_model",
         ),
         CheckConstraint("progress BETWEEN 0 AND 100", name="ck_jobs_progress"),
     )

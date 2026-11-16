@@ -46,13 +46,15 @@ class ColaTrabajos:
         self.db.commit()
 
     def avanzar(self, job: Job, stage: str, progress: int) -> None:
-        """Publica el progreso real del pipeline para que los clientes lo consulten."""
+        """Publica el progreso real para que los clientes lo consulten."""
         job.stage = stage
         job.progress = progress
         self.db.commit()
         print(f"[job {job.id}] {progress}% - {stage}")
 
-    def registrar_archivo(self, job: Job, path: str, formato: str, tipo: str) -> None:
+    def registrar_archivo(
+        self, job: Job, path: str, formato: str, tipo: str
+    ) -> None:
         self.db.add(
             Media(
                 name=os.path.basename(path),
@@ -64,11 +66,15 @@ class ColaTrabajos:
         )
         self.db.commit()
 
-    def marcar_terminado(self, job: Job, archivos: list, video_type: str) -> None:
-        """Cierra el trabajo solo si existen todos sus archivos obligatorios."""
+    def marcar_terminado(
+        self, job: Job, archivos: list, video_type: str
+    ) -> None:
+        """Cierra el trabajo solo si existen sus archivos obligatorios."""
         faltantes = [p for p in archivos if not os.path.exists(p)]
         if faltantes:
-            raise RuntimeError(f"Faltan archivos generados: {', '.join(faltantes)}")
+            raise RuntimeError(
+                f"Faltan archivos generados: {', '.join(faltantes)}"
+            )
         job.video_type = video_type
         job.status = "done"
         job.stage = "completado"
@@ -81,12 +87,17 @@ class ColaTrabajos:
         """Marca con error los trabajos interrumpidos por un reinicio.
 
         Los trabajos en cola no se tocan: el trabajador los retoma en orden.
-        Devuelve los ids de los interrumpidos para limpiar sus archivos parciales.
+        Devuelve los ids de los interrumpidos para limpiar sus archivos
+        parciales.
         """
-        interrumpidos = self.db.query(Job).filter(Job.status == "running").all()
+        interrumpidos = (
+            self.db.query(Job).filter(Job.status == "running").all()
+        )
         for job in interrumpidos:
             job.status = "error"
-            job.error = "El procesamiento se interrumpio por un reinicio del servidor"
+            job.error = (
+                "El procesamiento se interrumpio por un reinicio del servidor"
+            )
             job.finished_at = _ahora()
         self.db.commit()
         en_cola = self.db.query(Job).filter(Job.status == "queued").count()

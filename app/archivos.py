@@ -36,7 +36,7 @@ def ruta_karaoke(job_id: str) -> str:
 
 
 def archivos_del_trabajo(job_id: str) -> list:
-    """Archivos y carpetas que un trabajo puede dejar en disco, terminados o parciales."""
+    """Archivos y carpetas que un trabajo deja en disco (completos o no)."""
     rutas = glob.glob(os.path.join(DIR_VIDEOS, f"{job_id}_*"))
     rutas += [
         os.path.join(DIR_AUDIOS, f"{job_id}.wav"),
@@ -61,7 +61,7 @@ def eliminar_rutas(rutas) -> None:
 
 
 def ejecutable_venv(venv: str, nombre: str) -> str:
-    """Ejecutable de un entorno de Python del proyecto, en Windows o en Linux."""
+    """Ejecutable de un entorno de Python del proyecto (Windows o Linux)."""
     if os.name == "nt":
         return os.path.join(DIR_PROYECTO, venv, "Scripts", f"{nombre}.exe")
     return os.path.join(DIR_PROYECTO, venv, "bin", nombre)
