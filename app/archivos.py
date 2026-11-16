@@ -16,6 +16,14 @@ DIR_AUDIOS = os.path.join("media", "audios")
 DIR_SRT = os.path.join("media", "subtitulos", "subtitulos_srt")
 DIR_ASS = os.path.join("media", "subtitulos", "subtitulos_ass")
 
+# Modelos preentrenados guardados en el proyecto, para procesar sin conexion
+DIR_MODELOS = os.path.join(DIR_PROYECTO, "pretrained_models")
+
+
+def ruta_modelo(nombre: str, *partes: str) -> str:
+    """Archivos de un modelo en `pretrained_models/<nombre>/modelo`."""
+    return os.path.join(DIR_MODELOS, nombre, "modelo", *partes)
+
 
 def crear_directorios() -> None:
     for carpeta in (DIR_VIDEOS, DIR_AUDIOS, DIR_SRT, DIR_ASS):

@@ -34,8 +34,10 @@ logs/
 media/
 output_*/
 
-# Modelos preentrenados (archivos grandes)
-pretrained_models/
+# Modelos preentrenados y datasets (archivos grandes); se descargan con
+# pretrained_models/descargar_modelos.py
+pretrained_models/*/modelo/
+pretrained_models/*/dataset/
 
 # Frontend (este es un proyecto de backend)
 frontend/

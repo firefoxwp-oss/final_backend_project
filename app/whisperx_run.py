@@ -100,6 +100,12 @@ def main():
         print(f"[WhisperX] Audio: {audio_path}", file=sys.stderr)
         print(f"[WhisperX] Output SRT: {srt_path}", file=sys.stderr)
 
+        # Modelos guardados en el proyecto: con ellos no se descarga nada
+        modelos = project_root / "pretrained_models" / "whisperx" / "modelo"
+        if modelos.is_dir():
+            os.environ.setdefault("NLTK_DATA", str(modelos / "nltk_data"))
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
         import torch
         import whisperx
 
@@ -111,6 +117,9 @@ def main():
             or ("cuda" if torch.cuda.is_available() else "cpu")
         )
         model_name = args.model or env("WHISPERX_MODEL") or "medium"
+        local = modelos / f"faster-whisper-{model_name}"
+        if local.is_dir():
+            model_name = str(local)
         compute_type = env("WHISPERX_COMPUTE_TYPE") or (
             "float16" if device == "cuda" else "int8"
         )
@@ -186,6 +195,10 @@ def main():
         align_model_name = env("WHISPERX_ALIGN_MODEL") or ALIGN_MODELS.get(
             language
         )
+        if align_model_name:
+            local = modelos / align_model_name.split("/")[-1]
+            if local.is_dir():
+                align_model_name = str(local)
         print(
             f"[WhisperX] Alineando (modelo: {align_model_name or 'default'})",
             file=sys.stderr,

@@ -12,8 +12,8 @@ class ResultadoSeparacion:
     instrumental: str
 
 
-def ejecutar_proceso(cmd) -> None:
-    subprocess.run(cmd, check=True)
+def ejecutar_proceso(cmd, entorno=None) -> None:
+    subprocess.run(cmd, check=True, env=entorno)
 
 
 class SeparadorVoz(ABC):
@@ -27,8 +27,9 @@ class SeparadorVoz(ABC):
     ) -> ResultadoSeparacion:
         """Genera la voz y el instrumental en `carpeta_salida`.
 
-        `ejecutar(cmd)` lanza el modelo; el trabajador pasa uno que lo detiene
-        si el trabajo se cancela. Lanza una excepcion si el modelo falla.
+        `ejecutar(cmd, entorno)` lanza el modelo; el trabajador pasa uno que
+        lo detiene si el trabajo se cancela. Lanza una excepcion si el modelo
+        falla.
         """
 
     @staticmethod

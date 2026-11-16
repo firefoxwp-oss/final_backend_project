@@ -3,7 +3,7 @@ PyTorch. Es el modelo principal."""
 
 import os
 
-from app.archivos import ejecutable_venv
+from app.archivos import ejecutable_venv, ruta_modelo
 from app.separacion.separador_voz import (
     ResultadoSeparacion,
     SeparadorVoz,
@@ -21,6 +21,8 @@ class SeparadorDemucs(SeparadorVoz):
         self.python = os.getenv("DEMUCS_PY") or ejecutable_venv(
             "venv_torch", "python"
         )
+        # Carpeta con los pesos del modelo; Demucs no descarga nada
+        self.repositorio = os.getenv("DEMUCS_REPO") or ruta_modelo("demucs")
 
     def separar(
         self, audio: str, carpeta_salida: str, ejecutar=ejecutar_proceso
@@ -32,6 +34,8 @@ class SeparadorDemucs(SeparadorVoz):
                 "demucs",
                 "-n",
                 self.modelo,
+                "--repo",
+                self.repositorio,
                 "--two-stems",
                 "vocals",
                 "-d",
@@ -39,7 +43,10 @@ class SeparadorDemucs(SeparadorVoz):
                 "-o",
                 carpeta_salida,
                 audio,
-            ]
+            ],
+            # Los pesos oficiales guardan la clase del modelo, que torch.load
+            # rechaza por defecto; es lo mismo que hace Demucs al descargarlos
+            {**os.environ, "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD": "1"},
         )
         base = os.path.join(
             carpeta_salida,
