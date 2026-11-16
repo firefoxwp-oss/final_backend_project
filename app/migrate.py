@@ -7,6 +7,8 @@ de modo que la migracion puede ejecutarse en cada arranque sin repetir
 cambios.
 """
 
+import re
+
 from sqlalchemy import inspect, text
 
 # (tabla, columna, DDL)
@@ -119,7 +121,9 @@ _CHECKS = [
         "ck_media_type",
         "CHECK (type IN ('audio', 'video', 'audio_vocals', "
         "'audio_instrumental', "
-        "'video_instrumental', 'subtitle', 'video_karaoke'))",
+        "'video_instrumental', 'subtitle', 'video_karaoke', "
+        # Sprint 2: pistas comprimidas y letra del Modo Karaoke
+        "'playback_vocals', 'playback_instrumental', 'lyrics'))",
     ),
 ]
 
@@ -223,8 +227,17 @@ def _aplicar_sprint1(conn, tablas) -> None:
 
     for tabla, nombre, ddl in _CHECKS:
         existentes = {
-            c["name"] for c in inspect(conn).get_check_constraints(tabla)
+            c["name"]: c.get("sqltext") or ""
+            for c in inspect(conn).get_check_constraints(tabla)
         }
+        # Una restriccion que no admite todos los valores actuales se
+        # reemplaza (por ejemplo, los tipos de archivo nuevos de un sprint)
+        if nombre in existentes and any(
+            valor not in existentes[nombre]
+            for valor in re.findall(r"'([^']+)'", ddl)
+        ):
+            conn.execute(text(f"ALTER TABLE {tabla} DROP CONSTRAINT {nombre}"))
+            del existentes[nombre]
         if nombre not in existentes:
             conn.execute(
                 text(f"ALTER TABLE {tabla} ADD CONSTRAINT {nombre} {ddl}")

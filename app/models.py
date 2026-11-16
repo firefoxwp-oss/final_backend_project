@@ -33,6 +33,10 @@ TIPOS_MEDIA = (
     "video_instrumental",
     "subtitle",
     "video_karaoke",
+    # Sprint 2: pistas comprimidas y letra sincronizada del Modo Karaoke
+    "playback_vocals",
+    "playback_instrumental",
+    "lyrics",
 )
 PLATAFORMAS = ("android",)
 
