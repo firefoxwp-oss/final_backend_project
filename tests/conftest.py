@@ -144,23 +144,22 @@ def token(servidor, usuario):
     return respuesta.json()["access_token"]
 
 
-@pytest.fixture(scope="session")
-def video_corto(tmp_path_factory):
-    """Video de 8 s generado con FFmpeg (imagen fija y un tono)."""
-    ruta = tmp_path_factory.mktemp("videos") / "cancion.mp4"
+def _generar_video(ruta, segundos):
+    """Video generado con FFmpeg: imagen fija y un tono."""
     subprocess.run(
         [
             "ffmpeg",
+            "-nostdin",
             "-v",
             "error",
             "-f",
             "lavfi",
             "-i",
-            "color=c=blue:s=320x240:d=8",
+            f"color=c=blue:s=320x240:d={segundos}",
             "-f",
             "lavfi",
             "-i",
-            "sine=frequency=440:duration=8",
+            f"sine=frequency=440:duration={segundos}",
             "-shortest",
             "-c:v",
             "libx264",
@@ -172,3 +171,17 @@ def video_corto(tmp_path_factory):
         check=True,
     )
     return ruta
+
+
+@pytest.fixture(scope="session")
+def video_largo(tmp_path_factory):
+    """Video de 60 s, para cancelar mientras se procesa."""
+    ruta = tmp_path_factory.mktemp("videos") / "largo.mp4"
+    return _generar_video(ruta, 60)
+
+
+@pytest.fixture(scope="session")
+def video_corto(tmp_path_factory):
+    """Video de 8 s generado con FFmpeg (imagen fija y un tono)."""
+    ruta = tmp_path_factory.mktemp("videos") / "cancion.mp4"
+    return _generar_video(ruta, 8)
