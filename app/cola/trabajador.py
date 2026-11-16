@@ -33,7 +33,11 @@ from app.archivos import (
 )
 from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
 from app.database import SessionLocal
-from app.karaoke import generar_karaoke_desde_main, get_video_resolution
+from app.karaoke.compresor_audio import CompresorAudio
+from app.karaoke.video_karaoke import (
+    generar_karaoke_desde_main,
+    get_video_resolution,
+)
 from app.models import Job, Media
 from app.notificaciones.notificador import Notificador
 from app.separacion.separador_demucs import SeparadorDemucs
@@ -59,6 +63,7 @@ class Trabajador:
             SeparadorSpleeter(),
         ]
         self.notificador = notificador or Notificador()
+        self.compresor = CompresorAudio()
         self._apagar = False
         self._proceso_actual = None
 
@@ -204,6 +209,11 @@ class Trabajador:
             audio_permanent_dir, "accompaniment.wav"
         )
         permanent_vocals = os.path.join(audio_permanent_dir, "vocals.wav")
+        # Pistas comprimidas del Modo Karaoke (Pb-6)
+        reproduccion_instrumental = os.path.join(
+            audio_permanent_dir, "instrumental.m4a"
+        )
+        reproduccion_voz = os.path.join(audio_permanent_dir, "vocals.m4a")
         video_karaoke_path = None
 
         try:
@@ -264,6 +274,19 @@ class Trabajador:
             cola.registrar_archivo(
                 job, permanent_vocals, "wav", "audio_vocals"
             )
+            ejecutar = lambda cmd: self._ejecutar(job_id, cmd)  # noqa: E731
+            self.compresor.comprimir(
+                permanent_instrumental, reproduccion_instrumental, ejecutar
+            )
+            self.compresor.comprimir(
+                permanent_vocals, reproduccion_voz, ejecutar
+            )
+            cola.registrar_archivo(
+                job, reproduccion_instrumental, "m4a", "playback_instrumental"
+            )
+            cola.registrar_archivo(
+                job, reproduccion_voz, "m4a", "playback_vocals"
+            )
 
             # 3) Video instrumental
             cola.avanzar(job, "generando_instrumental", 40)
@@ -314,6 +337,8 @@ class Trabajador:
                     audio_file,
                     permanent_instrumental,
                     permanent_vocals,
+                    reproduccion_instrumental,
+                    reproduccion_voz,
                     final_filename,
                 ],
                 "karaoke" if video_karaoke_path else "instrumental",
