@@ -95,6 +95,7 @@ class JobResponse(BaseModel):
     stage: Optional[str] = None
     progress: int
     video_type: Optional[str] = None
+    separation_model: Optional[str] = None
     project_id: Optional[int] = None
     duration_seconds: Optional[int] = None
     error: Optional[str] = None

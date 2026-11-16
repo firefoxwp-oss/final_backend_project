@@ -73,6 +73,7 @@ def test_el_trabajador_completa_el_procesamiento(servidor, token, video_corto):
     estado = _estado(servidor, token, job_id)
     assert estado["status"] == "done"
     assert estado["progress"] == 100
+    assert estado["separation_model"] == "demucs"
     assert estado["artifacts"]["video_instrumental"]
     assert estado["artifacts"]["audio_vocals"]
     assert estado["artifacts"]["audio_instrumental"]
