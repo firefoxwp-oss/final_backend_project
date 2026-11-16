@@ -4,7 +4,9 @@ Las usan la API y el trabajador de la cola, que se ejecutan en procesos
 distintos pero comparten la carpeta `media/`.
 """
 
+import glob
 import os
+import shutil
 import subprocess
 
 DIR_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +33,31 @@ def ruta_instrumental(job_id: str) -> str:
 
 def ruta_karaoke(job_id: str) -> str:
     return os.path.join(DIR_VIDEOS, f"{job_id}_karaoke.mp4")
+
+
+def archivos_del_trabajo(job_id: str) -> list:
+    """Archivos y carpetas que un trabajo puede dejar en disco, terminados o parciales."""
+    rutas = glob.glob(os.path.join(DIR_VIDEOS, f"{job_id}_*"))
+    rutas += [
+        os.path.join(DIR_AUDIOS, f"{job_id}.wav"),
+        os.path.join(DIR_AUDIOS, job_id),
+        os.path.join(DIR_SRT, f"{job_id}.srt"),
+        os.path.join(DIR_ASS, f"{job_id}.ass"),
+        os.path.join("media", "metadatos", "karaoke", job_id),
+        f"output_{job_id}",
+    ]
+    return rutas
+
+
+def eliminar_rutas(rutas) -> None:
+    for ruta in rutas:
+        if os.path.isdir(ruta):
+            shutil.rmtree(ruta, ignore_errors=True)
+        elif os.path.exists(ruta):
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
 
 
 def ejecutable_venv(venv: str, nombre: str) -> str:
