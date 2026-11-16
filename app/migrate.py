@@ -23,6 +23,12 @@ _COLUMNAS = [
         "started_at",
         "ALTER TABLE jobs ADD COLUMN started_at TIMESTAMPTZ",
     ),
+    # Sprint 2: envio de la notificacion de finalizacion
+    (
+        "jobs",
+        "notified_at",
+        "ALTER TABLE jobs ADD COLUMN notified_at TIMESTAMPTZ",
+    ),
 ]
 
 _INDICES = [
