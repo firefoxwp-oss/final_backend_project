@@ -1,0 +1,18 @@
+[Unit]
+Description=Trabajador de la cola de procesamiento (Karaoke)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/karaoke/final_backend_project
+EnvironmentFile=/opt/karaoke/final_backend_project/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/karaoke/final_backend_project/venv/bin/python -m app.cola.trabajador
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
