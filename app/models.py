@@ -1,6 +1,7 @@
 from sqlalchemy import (
     Column,
     Integer,
+    SmallInteger,
     String,
     Text,
     DateTime,
@@ -39,6 +40,9 @@ TIPOS_MEDIA = (
     "lyrics",
 )
 PLATAFORMAS = ("android",)
+# Sprint 3: pistas que se generan en otro tono (Pb-11)
+PISTAS_TONO = ("instrumental", "vocals")
+TONO_MAXIMO = 6
 
 
 def _en(columna: str, valores) -> str:
@@ -207,6 +211,44 @@ class Device(Base):
         UniqueConstraint("token", name="uq_devices_token"),
         CheckConstraint(
             _en("platform", PLATAFORMAS), name="ck_devices_platform"
+        ),
+    )
+
+
+class ToneVersion(Base):
+    """Pista de una cancion en otro tono, generada con FFmpeg (rubberband)
+    la primera vez que se pide y reutilizada despues (Pb-11)."""
+
+    __tablename__ = "tone_versions"
+
+    id = Column(Integer, primary_key=True)
+    job_id = Column(
+        String(36),
+        ForeignKey("jobs.id", ondelete="CASCADE", name="fk_tone_versions_job"),
+        nullable=False,
+    )
+    semitones = Column(SmallInteger, nullable=False)
+    track = Column(String(12), nullable=False)
+    path = Column(String(500), nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        PrimaryKeyConstraint("id", name="pk_tone_versions"),
+        UniqueConstraint(
+            "job_id", "semitones", "track", name="uq_tone_versions"
+        ),
+        CheckConstraint(
+            f"semitones BETWEEN -{TONO_MAXIMO} AND {TONO_MAXIMO} "
+            "AND semitones <> 0",
+            name="ck_tone_versions_semitones",
+        ),
+        CheckConstraint(
+            _en("track", PISTAS_TONO), name="ck_tone_versions_track"
         ),
     )
 
