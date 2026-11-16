@@ -7,7 +7,7 @@ esta carpeta, así que el sistema funciona sin conexión a internet.
 |---|---|---|
 | `demucs/` | Demucs v4 (htdemucs) | Separación de la voz (modelo principal) |
 | `spleeter/` | Spleeter 2stems | Separación de la voz (respaldo) |
-| `whisperx/` | Whisper large-v2 y wav2vec2 en español | Transcripción y alineación de la letra |
+| `whisperx/` | Whisper large-v2, Whisper large-v3-turbo y wav2vec2 en español | Transcripción y alineación de la letra |
 
 Cada modelo tiene:
 

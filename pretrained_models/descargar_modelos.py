@@ -41,6 +41,18 @@ WHISPER = (
     "f0fe81560cb8b68660e564f55dd99207059c092e",
     ["config.json", "model.bin", "tokenizer.json", "vocabulary.txt"],
 )
+# Modelo mas rapido, probado en el Sprint 2 (WHISPERX_MODEL=large-v3-turbo)
+WHISPER_TURBO = (
+    "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+    "0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf",
+    [
+        "config.json",
+        "model.bin",
+        "preprocessor_config.json",
+        "tokenizer.json",
+        "vocabulary.json",
+    ],
+)
 ALINEADOR = (
     "jonatasgrosman/wav2vec2-large-xlsr-53-spanish",
     "80106547eee5065e01618d6588c22c256e8d0e70",
@@ -106,7 +118,7 @@ def whisperx() -> None:
     from huggingface_hub import snapshot_download
 
     carpeta = DIR / "whisperx" / "modelo"
-    for repo, revision, archivos in (WHISPER, ALINEADOR):
+    for repo, revision, archivos in (WHISPER, WHISPER_TURBO, ALINEADOR):
         destino = carpeta / repo.split("/")[1]
         snapshot_download(
             repo,
