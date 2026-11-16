@@ -27,7 +27,7 @@ from app.auth import (
     get_db,
 )
 from app.karaoke import karaoke_router
-from app.api import rutas_trabajos
+from app.api import rutas_dispositivos, rutas_trabajos
 
 Base.metadata.create_all(bind=engine)
 aplicar_migraciones(engine)
@@ -52,6 +52,7 @@ app.add_middleware(
 
 app.include_router(karaoke_router)
 app.include_router(rutas_trabajos.router)
+app.include_router(rutas_dispositivos.router)
 
 # --------------------------------------------------------------------- basico
 
