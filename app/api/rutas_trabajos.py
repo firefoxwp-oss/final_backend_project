@@ -185,11 +185,12 @@ def listar_jobs(
     if project_id is not None:
         q = q.filter(Job.project_id == project_id)
     jobs = q.order_by(Job.created_at.desc()).limit(min(limit, 200)).all()
+    posiciones = ColaTrabajos(db).posiciones()
 
-    return [_a_respuesta(j) for j in jobs]
+    return [_a_respuesta(j, posiciones.get(j.id)) for j in jobs]
 
 
-def _a_respuesta(job: Job) -> JobResponse:
+def _a_respuesta(job: Job, posicion=None) -> JobResponse:
     return JobResponse(
         id=job.id,
         source_filename=job.source_filename,
@@ -201,6 +202,9 @@ def _a_respuesta(job: Job) -> JobResponse:
         duration_seconds=job.duration_seconds,
         error=job.error,
         created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        queue_position=posicion,
         artifacts=_artefactos(job.id),
     )
 
@@ -211,12 +215,12 @@ def estado_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Detalle de un trabajo.
+    """Estado de un trabajo: posicion en la cola, etapa y avance.
 
-    Sirve tanto para seguir el progreso mientras el POST sigue en curso como
-    para reabrir despues un procesamiento terminado desde el historial.
+    Tambien sirve para reabrir un procesamiento terminado desde el historial.
     """
-    return _a_respuesta(_job_propio(job_id, db, current_user))
+    job = _job_propio(job_id, db, current_user)
+    return _a_respuesta(job, ColaTrabajos(db).posicion_en_cola(job))
 
 
 @router.delete("/jobs/{job_id}", status_code=204)

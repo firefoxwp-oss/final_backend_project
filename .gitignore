@@ -44,3 +44,6 @@ frontend/
 *.tmp
 *.temp
 .cache/
+
+# Pruebas
+.pytest_cache/

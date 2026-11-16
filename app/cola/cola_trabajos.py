@@ -38,6 +38,27 @@ class ColaTrabajos:
             .first()
         )
 
+    def posiciones(self) -> dict:
+        """Posicion de cada trabajo en cola (1 es el siguiente)."""
+        en_cola = (
+            self.db.query(Job.id)
+            .filter(Job.status == "queued")
+            .order_by(Job.created_at)
+            .all()
+        )
+        return {job_id: i for i, (job_id,) in enumerate(en_cola, start=1)}
+
+    def posicion_en_cola(self, job: Job):
+        """Posicion del trabajo en la cola, o None si ya no espera."""
+        if job.status != "queued":
+            return None
+        anteriores = (
+            self.db.query(Job)
+            .filter(Job.status == "queued", Job.created_at < job.created_at)
+            .count()
+        )
+        return anteriores + 1
+
     def marcar_procesando(self, job: Job) -> None:
         job.status = "running"
         job.stage = "extrayendo_audio"
