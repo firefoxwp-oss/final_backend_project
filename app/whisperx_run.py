@@ -127,7 +127,9 @@ def main():
         help="Ruta de salida de la letra sincronizada (JSON)",
     )
     parser.add_argument(
-        "--model", default=None, help="tiny|base|small|medium|large-v2"
+        "--model",
+        default=None,
+        help="tiny|base|small|medium|large-v2|large-v3-turbo",
     )
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument("--batch-size", type=int, default=None)
