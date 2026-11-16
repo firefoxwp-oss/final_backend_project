@@ -1,6 +1,6 @@
 import re
 
-# ---------------------------------------------------------------- configuracion
+# --------------------------------------------------------------- configuracion
 
 DEFAULT_VIDEO = {
     "width": 1920,
@@ -13,10 +13,10 @@ DEFAULT_VIDEO = {
 
 DEFAULT_GROUP = {
     "pause_threshold_ms": 800,
-    "max_chars": 40,          # linea legible mientras se canta
-    "lead_in_ms": 2000,       # anticipacion MAXIMA; se recorta si no cabe
-    "hold_out_ms": 600,       # permanencia MAXIMA despues de la ultima silaba
-    "min_syllable_cs": 6,     # por debajo de esto no se trocea la palabra
+    "max_chars": 40,  # linea legible mientras se canta
+    "lead_in_ms": 2000,  # anticipacion MAXIMA; se recorta si no cabe
+    "hold_out_ms": 600,  # permanencia MAXIMA despues de la ultima silaba
+    "min_syllable_cs": 6,  # por debajo de esto no se trocea la palabra
 }
 
 DEFAULT_STYLE = {
@@ -58,9 +58,23 @@ _E_I = set("eiEIéíÉÍ")
 
 # Grupos consonanticos que nunca se separan en espanol
 INSEPARABLES = {
-    "pr", "br", "tr", "dr", "cr", "gr", "fr",
-    "pl", "bl", "cl", "gl", "fl",
-    "ch", "ll", "rr", "qu", "gu",
+    "pr",
+    "br",
+    "tr",
+    "dr",
+    "cr",
+    "gr",
+    "fr",
+    "pl",
+    "bl",
+    "cl",
+    "gl",
+    "fl",
+    "ch",
+    "ll",
+    "rr",
+    "qu",
+    "gu",
 }
 
 
@@ -85,7 +99,7 @@ def _mismo_nucleo(a, b):
         return False  # hiato: di-a, ba-ul
     if a in VOCALES_FUERTES and b in VOCALES_FUERTES:
         return False  # hiato: le-on, ca-os
-    return True       # diptongo: sie, nue, ai
+    return True  # diptongo: sie, nue, ai
 
 
 def split_syllables(palabra):
@@ -133,9 +147,15 @@ def split_syllables(palabra):
         elif c == 2:
             corte = fin_v if cons.lower() in INSEPARABLES else fin_v + 1
         elif c == 3:
-            corte = fin_v + 1 if cons[1:].lower() in INSEPARABLES else fin_v + 2
+            corte = (
+                fin_v + 1 if cons[1:].lower() in INSEPARABLES else fin_v + 2
+            )
         else:
-            corte = fin_v + 2 if cons[2:].lower() in INSEPARABLES else fin_v + c - 1
+            corte = (
+                fin_v + 2
+                if cons[2:].lower() in INSEPARABLES
+                else fin_v + c - 1
+            )
         cortes.append(corte)
 
     partes, prev = [], 0
@@ -146,7 +166,8 @@ def split_syllables(palabra):
     return [x for x in partes if x]
 
 
-# ---------------------------------------------------------------------- tiempos
+# --------------------------------------------------------------------- tiempos
+
 
 def segundos_a_tiempo_srt(segundos):
     segundos = float(segundos)
@@ -199,13 +220,16 @@ def parse_srt_word_level(path):
 
 # -------------------------------------------------------------------- agrupado
 
+
 def group_words(words, cfg_video, cfg_group):
     """Agrupa palabras sueltas en lineas cantables."""
     if not words:
         return []
 
     max_chars = cfg_group.get("max_chars", DEFAULT_GROUP["max_chars"])
-    pausa = cfg_group.get("pause_threshold_ms", DEFAULT_GROUP["pause_threshold_ms"])
+    pausa = cfg_group.get(
+        "pause_threshold_ms", DEFAULT_GROUP["pause_threshold_ms"]
+    )
 
     def largo(grupo, extra=None):
         textos = [w["text"] for w in grupo]
@@ -220,7 +244,10 @@ def group_words(words, cfg_video, cfg_group):
         hueco = w["start_ms"] - prev_w["end_ms"]
         cortar = (
             hueco > pausa
-            or (prev_w["text"].rstrip().endswith((".", "!", "?")) and hueco > 500)
+            or (
+                prev_w["text"].rstrip().endswith((".", "!", "?"))
+                and hueco > 500
+            )
             or largo(actual, w) > max_chars
         )
         if cortar:
@@ -231,7 +258,8 @@ def group_words(words, cfg_video, cfg_group):
     if actual:
         frases.append(actual)
 
-    # Fusiona lineas huerfanas muy cortas con la siguiente si caben y van seguidas
+    # Fusiona lineas huerfanas muy cortas con la siguiente si caben y van
+    # seguidas
     optimizado = []
     i = 0
     while i < len(frases):
@@ -250,6 +278,7 @@ def group_words(words, cfg_video, cfg_group):
 
 # ------------------------------------------------------------------ generacion
 
+
 def ass_header(cfg_video, style):
     return (
         "[Script Info]\n"
@@ -265,10 +294,14 @@ def ass_header(cfg_video, style):
         + "WrapStyle: 0\n\n"
         "[V4+ Styles]\n"
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
-        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, "
         "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
         "MarginL, MarginR, MarginV, Encoding\n"
-        + "Style: {},{},{},{},{},{},{},1,0,0,0,100,100,0,0,1,{},{},{},{},{},{},1\n\n".format(
+        + (
+            "Style: {},{},{},{},{},{},{},1,0,0,0,100,100,0,0,1,"
+            "{},{},{},{},{},{},1\n\n"
+        ).format(
             style["name"],
             style["font"],
             cfg_video["font_size"],
@@ -359,7 +392,11 @@ def _texto_karaoke(phrase_words, inicio_linea, cfg_group):
             # palabra justo cuando toca cantarla.
             hueco_cs = max(
                 0,
-                int(round((phrase_words[idx + 1]["start_ms"] - w["end_ms"]) / 10)),
+                int(
+                    round(
+                        (phrase_words[idx + 1]["start_ms"] - w["end_ms"]) / 10
+                    )
+                ),
             )
             texto += "{\\kf" + str(hueco_cs) + "} "
 
@@ -416,7 +453,10 @@ def ass_line(phrase_words, cfg_video, cfg_group=None):
     inicio, fin = planificar_lineas([phrase_words], cfg_group)[0]
     texto = _texto_karaoke(phrase_words, inicio, cfg_group)
     return "Dialogue: 0,{},{},{},,0,0,0,,{}".format(
-        ms_to_ass_time(inicio), ms_to_ass_time(fin), DEFAULT_STYLE["name"], texto
+        ms_to_ass_time(inicio),
+        ms_to_ass_time(fin),
+        DEFAULT_STYLE["name"],
+        texto,
     )
 
 
@@ -431,7 +471,10 @@ def write_ass(phrases, output_path, cfg_video, cfg_group=None, style=None):
         texto = _texto_karaoke(p, inicio, cfg_group)
         lineas.append(
             "Dialogue: 0,{},{},{},,0,0,0,,{}".format(
-                ms_to_ass_time(inicio), ms_to_ass_time(fin), style["name"], texto
+                ms_to_ass_time(inicio),
+                ms_to_ass_time(fin),
+                style["name"],
+                texto,
             )
         )
 
@@ -439,7 +482,9 @@ def write_ass(phrases, output_path, cfg_video, cfg_group=None, style=None):
         f.write(ass_header(cfg_video, style) + "\n".join(lineas) + "\n")
 
 
-def convertir_srt_a_ass(srt_path, ass_output, cfg_video=None, cfg_group=None, style=None):
+def convertir_srt_a_ass(
+    srt_path, ass_output, cfg_video=None, cfg_group=None, style=None
+):
     cfg_video = cfg_video or DEFAULT_VIDEO
     cfg_group = dict(DEFAULT_GROUP, **(cfg_group or {}))
     style = style or DEFAULT_STYLE

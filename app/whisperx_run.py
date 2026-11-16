@@ -40,8 +40,8 @@ def colapsar_repeticiones(word_segments, max_repeticiones=6):
     """Elimina bucles de decodificacion.
 
     Whisper puede quedarse repitiendo la misma palabra decenas de veces sobre
-    vocales sostenidas o ad-libs. Se conservan unas pocas repeticiones (legitimas
-    en una cancion) y se descarta el resto.
+    vocales sostenidas o ad-libs. Se conservan unas pocas repeticiones
+    (legitimas en una cancion) y se descarta el resto.
     """
     limpio = []
     anterior = None
@@ -65,12 +65,20 @@ def main():
     parser = argparse.ArgumentParser(
         description="Transcribe audio a SRT palabra a palabra con WhisperX."
     )
-    parser.add_argument("--audio", required=True, help="Ruta del audio a transcribir")
-    parser.add_argument("--srt", required=True, help="Ruta de salida del archivo SRT")
-    parser.add_argument("--model", default=None, help="tiny|base|small|medium|large-v2")
+    parser.add_argument(
+        "--audio", required=True, help="Ruta del audio a transcribir"
+    )
+    parser.add_argument(
+        "--srt", required=True, help="Ruta de salida del archivo SRT"
+    )
+    parser.add_argument(
+        "--model", default=None, help="tiny|base|small|medium|large-v2"
+    )
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument("--batch-size", type=int, default=None)
-    parser.add_argument("--language", default=None, help="Codigo ISO (es, en, ...)")
+    parser.add_argument(
+        "--language", default=None, help="Codigo ISO (es, en, ...)"
+    )
     args = parser.parse_args()
 
     audio_path = args.audio
@@ -126,11 +134,14 @@ def main():
         if mkl:
             os.environ["MKL_NUM_THREADS"] = str(mkl)
 
-        # Umbrales de rechazo. Whisper alucina texto sobre el residuo musical que
-        # deja la separacion de voces (frases inventadas en tramos sin canto) y
-        # entra en bucle sobre notas sostenidas. Estos limites los recortan.
+        # Umbrales de rechazo. Whisper alucina texto sobre el residuo musical
+        # que deja la separacion de voces (frases inventadas en tramos sin
+        # canto) y entra en bucle sobre notas sostenidas. Estos limites los
+        # recortan.
         asr_options = {
-            "compression_ratio_threshold": as_float("WHISPERX_COMPRESSION_RATIO", 2.0),
+            "compression_ratio_threshold": as_float(
+                "WHISPERX_COMPRESSION_RATIO", 2.0
+            ),
             "log_prob_threshold": as_float("WHISPERX_LOGPROB", -0.8),
             "no_speech_threshold": as_float("WHISPERX_NO_SPEECH", 0.75),
             "condition_on_previous_text": False,
@@ -152,28 +163,44 @@ def main():
             )
         except TypeError:
             # Compatibilidad con versiones que no aceptan estas opciones
-            print("[WhisperX] asr_options no soportado, usando defaults",
-                  file=sys.stderr)
+            print(
+                "[WhisperX] asr_options no soportado, usando defaults",
+                file=sys.stderr,
+            )
             model = whisperx.load_model(
-                model_name, device, compute_type=compute_type, language=language
+                model_name,
+                device,
+                compute_type=compute_type,
+                language=language,
             )
 
         audio = whisperx.load_audio(audio_path)
-        print(f"[WhisperX] Audio cargado ({len(audio) / 16000:.2f}s)", file=sys.stderr)
+        print(
+            f"[WhisperX] Audio cargado ({len(audio) / 16000:.2f}s)",
+            file=sys.stderr,
+        )
 
         result = model.transcribe(audio, batch_size=batch_size)
         print("[WhisperX] Transcripcion completada", file=sys.stderr)
 
-        align_model_name = env("WHISPERX_ALIGN_MODEL") or ALIGN_MODELS.get(language)
-        print(f"[WhisperX] Alineando (modelo: {align_model_name or 'default'})",
-              file=sys.stderr)
+        align_model_name = env("WHISPERX_ALIGN_MODEL") or ALIGN_MODELS.get(
+            language
+        )
+        print(
+            f"[WhisperX] Alineando (modelo: {align_model_name or 'default'})",
+            file=sys.stderr,
+        )
         try:
             align_model, metadata = whisperx.load_align_model(
-                language_code=language, device=device, model_name=align_model_name
+                language_code=language,
+                device=device,
+                model_name=align_model_name,
             )
         except Exception as e:
-            print(f"[WhisperX] Fallback al alineador por defecto: {e}",
-                  file=sys.stderr)
+            print(
+                f"[WhisperX] Fallback al alineador por defecto: {e}",
+                file=sys.stderr,
+            )
             align_model, metadata = whisperx.load_align_model(
                 language_code=language, device=device
             )
@@ -189,15 +216,20 @@ def main():
         print("[WhisperX] Alineamiento completado", file=sys.stderr)
 
         word_segments = aligned.get("word_segments") or []
-        print(f"[WhisperX] Palabras alineadas: {len(word_segments)}", file=sys.stderr)
+        print(
+            f"[WhisperX] Palabras alineadas: {len(word_segments)}",
+            file=sys.stderr,
+        )
 
         word_segments, descartadas = colapsar_repeticiones(word_segments)
         if descartadas:
-            print(f"[WhisperX] Repeticiones descartadas: {descartadas}",
-                  file=sys.stderr)
+            print(
+                f"[WhisperX] Repeticiones descartadas: {descartadas}",
+                file=sys.stderr,
+            )
 
-        # Numeracion correlativa: antes el indice se incrementaba tambien para las
-        # palabras descartadas, dejando huecos en la numeracion del SRT.
+        # Numeracion correlativa: antes el indice se incrementaba tambien para
+        # las palabras descartadas, dejando huecos en la numeracion del SRT.
         lines = []
         indice = 0
         sin_tiempo = 0
@@ -222,8 +254,10 @@ def main():
             )
 
         if sin_tiempo:
-            print(f"[WhisperX] Palabras sin timestamp omitidas: {sin_tiempo}",
-                  file=sys.stderr)
+            print(
+                f"[WhisperX] Palabras sin timestamp omitidas: {sin_tiempo}",
+                file=sys.stderr,
+            )
 
         destino = os.path.dirname(srt_path)
         if destino:
@@ -233,12 +267,16 @@ def main():
 
         print(f"SRT creado: {srt_path} ({indice} palabras)", file=sys.stderr)
         print(
-            f"[WhisperX] device={device} model={model_name} language={language} "
+            f"[WhisperX] device={device} model={model_name} "
+            f"language={language} "
             f"palabras={indice}"
         )
 
     except ImportError as e:
-        print(f"ERROR: No se pudo importar modulo requerido: {e}", file=sys.stderr)
+        print(
+            f"ERROR: No se pudo importar modulo requerido: {e}",
+            file=sys.stderr,
+        )
         sys.exit(1)
     except FileNotFoundError as e:
         print(f"ERROR: Archivo no encontrado: {e}", file=sys.stderr)

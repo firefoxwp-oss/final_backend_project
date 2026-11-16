@@ -34,13 +34,23 @@ router = APIRouter(tags=["trabajos"])
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "1024")) * 1024 * 1024
 MAX_DURACION_SEG = int(os.getenv("MAX_DURACION_MIN", "60")) * 60
-EXTENSIONES_PERMITIDAS = {".mp4", ".avi", ".mkv", ".mp3", ".mov", ".m4v", ".webm"}
+EXTENSIONES_PERMITIDAS = {
+    ".mp4",
+    ".avi",
+    ".mkv",
+    ".mp3",
+    ".mov",
+    ".m4v",
+    ".webm",
+}
 
 
 # --------------------------------------------------------------------- subida
 
 
-@router.post("/procesar-video/", status_code=202, response_model=TrabajoEncolado)
+@router.post(
+    "/procesar-video/", status_code=202, response_model=TrabajoEncolado
+)
 def procesar_video(
     file: UploadFile = File(...),
     video_type: str = Form("karaoke"),
@@ -49,7 +59,7 @@ def procesar_video(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Guarda el archivo, lo encola y responde de inmediato con el id del trabajo.
+    """Guarda el archivo, lo encola y responde de inmediato con su id.
 
     El procesamiento lo realiza el trabajador de la cola, independiente de esta
     peticion.
@@ -65,13 +75,16 @@ def procesar_video(
     if video_type not in TIPOS_VIDEO:
         raise HTTPException(
             status_code=400,
-            detail="Tipo de video no valido. Admitidos: " + ", ".join(TIPOS_VIDEO),
+            detail="Tipo de video no valido. Admitidos: "
+            + ", ".join(TIPOS_VIDEO),
         )
 
     if project_id is not None:
         proyecto = db.query(Project).filter(Project.id == project_id).first()
         if proyecto is None or proyecto.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Proyecto no autorizado")
+            raise HTTPException(
+                status_code=403, detail="Proyecto no autorizado"
+            )
 
     # El cliente puede proponer el id del trabajo
     session_uuid = job_id or str(uuid.uuid4())
@@ -133,15 +146,21 @@ def _artefactos(job_id: str) -> dict:
     return {
         "video_karaoke": os.path.exists(_ruta_karaoke(job_id)),
         "video_instrumental": os.path.exists(_ruta_instrumental(job_id)),
-        "audio_original": os.path.exists(os.path.join(DIR_AUDIOS, f"{job_id}.wav")),
+        "audio_original": os.path.exists(
+            os.path.join(DIR_AUDIOS, f"{job_id}.wav")
+        ),
         "audio_vocals": os.path.exists(
             os.path.join(DIR_AUDIOS, job_id, "vocals.wav")
         ),
         "audio_instrumental": os.path.exists(
             os.path.join(DIR_AUDIOS, job_id, "accompaniment.wav")
         ),
-        "subtitulos_srt": os.path.exists(os.path.join(DIR_SRT, f"{job_id}.srt")),
-        "subtitulos_ass": os.path.exists(os.path.join(DIR_ASS, f"{job_id}.ass")),
+        "subtitulos_srt": os.path.exists(
+            os.path.join(DIR_SRT, f"{job_id}.srt")
+        ),
+        "subtitulos_ass": os.path.exists(
+            os.path.join(DIR_ASS, f"{job_id}.ass")
+        ),
     }
 
 
@@ -220,7 +239,6 @@ def borrar_job(
     db.delete(job)
     db.commit()
     return
-
 
 
 # --------------------------------------------------------------- forma de onda
@@ -302,8 +320,16 @@ _TIPOS = {
     "video_instrumental": ("video/mp4", "instrumental.mp4", "attachment"),
     "video_karaoke": ("video/mp4", "karaoke.mp4", "attachment"),
     "video_karaoke_preview": ("video/mp4", "karaoke_preview.mp4", "inline"),
-    "subtitulos_srt": ("text/plain; charset=utf-8", "subtitulos.srt", "attachment"),
-    "subtitulos_ass": ("text/plain; charset=utf-8", "karaoke.ass", "attachment"),
+    "subtitulos_srt": (
+        "text/plain; charset=utf-8",
+        "subtitulos.srt",
+        "attachment",
+    ),
+    "subtitulos_ass": (
+        "text/plain; charset=utf-8",
+        "karaoke.ass",
+        "attachment",
+    ),
     "audio_original": ("audio/wav", "original.wav", "inline"),
     "audio_vocals": ("audio/wav", "vocals.wav", "inline"),
     "audio_instrumental": ("audio/wav", "instrumental.wav", "inline"),
@@ -319,7 +345,9 @@ def _ruta_de_tipo(tipo: str, job_id: str):
         "subtitulos_ass": os.path.join(DIR_ASS, f"{job_id}.ass"),
         "audio_original": os.path.join(DIR_AUDIOS, f"{job_id}.wav"),
         "audio_vocals": os.path.join(DIR_AUDIOS, job_id, "vocals.wav"),
-        "audio_instrumental": os.path.join(DIR_AUDIOS, job_id, "accompaniment.wav"),
+        "audio_instrumental": os.path.join(
+            DIR_AUDIOS, job_id, "accompaniment.wav"
+        ),
     }.get(tipo)
 
 
@@ -349,7 +377,8 @@ def descargar_todo(
 
     if not files_to_zip:
         return JSONResponse(
-            {"error": "No se encontraron archivos para descargar"}, status_code=404
+            {"error": "No se encontraron archivos para descargar"},
+            status_code=404,
         )
 
     fd, temp_zip_path = tempfile.mkstemp(suffix=".zip")
@@ -363,8 +392,9 @@ def descargar_todo(
         path=temp_zip_path,
         media_type="application/zip",
         filename=f"{job_id}_completo.zip",
-        background=BackgroundTask(lambda: os.path.exists(temp_zip_path)
-                                  and os.remove(temp_zip_path)),
+        background=BackgroundTask(
+            lambda: os.path.exists(temp_zip_path) and os.remove(temp_zip_path)
+        ),
     )
 
 
@@ -376,7 +406,9 @@ def descargar_archivo(
     current_user: User = Depends(get_current_user_media),
 ):
     if tipo not in _TIPOS:
-        return JSONResponse({"error": "Tipo de archivo no valido"}, status_code=400)
+        return JSONResponse(
+            {"error": "Tipo de archivo no valido"}, status_code=400
+        )
 
     _job_propio(job_id, db, current_user)
 
@@ -398,5 +430,8 @@ def descargar_archivo(
         headers["Cache-Control"] = "no-cache"
 
     return FileResponse(
-        path=file_path, media_type=media_type, filename=filename, headers=headers
+        path=file_path,
+        media_type=media_type,
+        filename=filename,
+        headers=headers,
     )

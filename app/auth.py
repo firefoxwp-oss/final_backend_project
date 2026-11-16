@@ -15,13 +15,16 @@ _DEFAULT_SECRET = "your-super-secret-key-change-in-production"
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", _DEFAULT_SECRET)
 if SECRET_KEY == _DEFAULT_SECRET:
     warnings.warn(
-        "JWT_SECRET_KEY no esta definida: se esta usando la clave por defecto. "
+        "JWT_SECRET_KEY no esta definida: se esta usando la clave "
+        "por defecto. "
         "Definela en .env antes de desplegar.",
         RuntimeWarning,
     )
 
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
+)
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 
 pwd_context = CryptContext(schemes=["bcrypt_sha256"], deprecated="auto")
@@ -46,7 +49,9 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(
+    data: dict, expires_delta: Optional[timedelta] = None
+) -> str:
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -60,7 +65,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=REFRESH_TOKEN_EXPIRE_DAYS
+    )
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -76,7 +83,9 @@ def decode_token(token: str) -> dict:
         )
 
 
-def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
+def authenticate_user(
+    db: Session, email: str, password: str
+) -> Optional[User]:
     user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(password, user.password):
         return None
@@ -119,7 +128,9 @@ def get_current_user(
 
 def get_current_user_media(
     request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+        security_optional
+    ),
     db: Session = Depends(get_db),
 ) -> User:
     """Autenticacion para endpoints consumidos por <video>, <audio> y descargas
@@ -127,7 +138,11 @@ def get_current_user_media(
 
     Acepta el token en la cabecera Bearer o en el parametro ?token=.
     """
-    token = credentials.credentials if credentials else request.query_params.get("token")
+    token = (
+        credentials.credentials
+        if credentials
+        else request.query_params.get("token")
+    )
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

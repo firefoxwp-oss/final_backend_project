@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, Query, status
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -66,7 +66,8 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
         )
     hashed_password = get_password_hash(user.password)
     db_user = User(name=user.name, email=user.email, password=hashed_password)
@@ -97,7 +98,8 @@ def refresh_token(token_data: TokenRefresh):
     payload = decode_token(token_data.refresh_token)
     if payload.get("type") != "refresh":
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type",
         )
     user_id = payload.get("sub")
     if user_id is None:
@@ -121,11 +123,11 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @app.get("/projects", response_model=List[ProjectResponse])
 def get_projects(
-    userId: Optional[int] = None,
+    user_id: Optional[int] = Query(None, alias="userId"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if userId is not None and current_user.id != userId:
+    if user_id is not None and current_user.id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado"
         )
@@ -148,7 +150,9 @@ def create_project(
             status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado"
         )
     project = Project(
-        name=payload.name, description=payload.description, user_id=payload.user_id
+        name=payload.name,
+        description=payload.description,
+        user_id=payload.user_id,
     )
     db.add(project)
     db.commit()
@@ -166,7 +170,8 @@ def update_project(
     project = db.query(Project).filter(Project.id == id).first()
     if not project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Proyecto no encontrado",
         )
     if project.user_id != current_user.id:
         raise HTTPException(
@@ -190,7 +195,8 @@ def delete_project(
     project = db.query(Project).filter(Project.id == id).first()
     if not project:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Proyecto no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Proyecto no encontrado",
         )
     if project.user_id != current_user.id:
         raise HTTPException(
