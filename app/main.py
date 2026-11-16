@@ -26,7 +26,7 @@ from app.auth import (
     get_current_user,
     get_db,
 )
-from app.karaoke import karaoke_router
+from app.karaoke.video_karaoke import karaoke_router
 from app.api import rutas_dispositivos, rutas_karaoke, rutas_trabajos
 
 Base.metadata.create_all(bind=engine)
