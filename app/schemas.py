@@ -72,6 +72,13 @@ class JobStatus(BaseModel):
         from_attributes = True
 
 
+class TrabajoEncolado(BaseModel):
+    """Respuesta de la subida: el trabajo queda en la cola."""
+
+    job_id: str
+    status: str
+
+
 class JobResponse(BaseModel):
     """Entrada del historial de trabajos."""
 

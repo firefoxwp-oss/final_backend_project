@@ -140,14 +140,17 @@ class Trabajador:
             )
             cola.registrar_archivo(job, final_filename, "mp4", "video_instrumental")
 
-            # 4) Subtitulos y video karaoke: si fallan, queda el instrumental
-            try:
-                video_karaoke_path = self.transcribir_y_generar_karaoke(
-                    cola, job, vocals_path, audio_file, final_filename, srt_path, ass_path
-                )
-            except Exception as e:
-                print(f"[job {job_id}] ERROR en subtitulos/karaoke: {e}")
-                traceback.print_exc()
+            # 4) Subtitulos y video karaoke, salvo que se pidiera solo el
+            #    instrumental; si fallan, queda el instrumental
+            if job.video_type != "instrumental":
+                try:
+                    video_karaoke_path = self.transcribir_y_generar_karaoke(
+                        cola, job, vocals_path, audio_file, final_filename,
+                        srt_path, ass_path,
+                    )
+                except Exception as e:
+                    print(f"[job {job_id}] ERROR en subtitulos/karaoke: {e}")
+                    traceback.print_exc()
 
             cola.marcar_terminado(
                 job,
