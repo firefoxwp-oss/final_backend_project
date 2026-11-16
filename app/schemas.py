@@ -108,3 +108,20 @@ class JobResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DispositivoRegistro(BaseModel):
+    """Celular que se registra para recibir notificaciones (Pb-4)."""
+
+    token: str = Field(min_length=1, max_length=255)
+    platform: str = "android"
+
+
+class DispositivoRespuesta(BaseModel):
+    id: int
+    platform: str
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

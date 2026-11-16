@@ -7,6 +7,8 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     CheckConstraint,
+    PrimaryKeyConstraint,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
@@ -32,6 +34,7 @@ TIPOS_MEDIA = (
     "subtitle",
     "video_karaoke",
 )
+PLATAFORMAS = ("android",)
 
 
 def _en(columna: str, valores) -> str:
@@ -161,5 +164,47 @@ class Job(Base):
     )
 
 
+class Device(Base):
+    """Celular donde el usuario inicio sesion, para enviarle notificaciones.
+
+    Cada celular se identifica por su token de Firebase Cloud Messaging; si
+    otro usuario inicia sesion en el mismo celular, el token pasa a ser suyo.
+    """
+
+    __tablename__ = "devices"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE", name="fk_devices_user"),
+        nullable=False,
+    )
+    token = Column(String(255), nullable=False)
+    platform = Column(
+        String(10), nullable=False, default="android", server_default="android"
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=func.now(),
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utcnow,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        PrimaryKeyConstraint("id", name="pk_devices"),
+        UniqueConstraint("token", name="uq_devices_token"),
+        CheckConstraint(
+            _en("platform", PLATAFORMAS), name="ck_devices_platform"
+        ),
+    )
+
+
 Index("ix_jobs_user_created", Job.user_id, Job.created_at)
 Index("ix_jobs_queue", Job.status, Job.created_at)
+Index("ix_devices_user_id", Device.user_id)
