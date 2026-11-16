@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, Dict
+from typing import Dict, List, Optional
 from datetime import datetime
 
 
@@ -108,6 +108,24 @@ class JobResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PalabraLetra(BaseModel):
+    texto: str
+    inicio: float
+    fin: float
+
+
+class LineaLetra(BaseModel):
+    inicio: float
+    fin: float
+    palabras: List[PalabraLetra]
+
+
+class LetraRespuesta(BaseModel):
+    """Letra sincronizada por palabra del Modo Karaoke (Pb-5)."""
+
+    lineas: List[LineaLetra]
 
 
 class DispositivoRegistro(BaseModel):
