@@ -232,7 +232,8 @@ class Trabajador:
 
             # 2) Separacion de voces
             cola.avanzar(job, "separando_voces", 15)
-            separacion, _modelo = self.separar(job_id, audio_file, output_dir)
+            separacion, modelo = self.separar(job_id, audio_file, output_dir)
+            cola.registrar_modelo(job, modelo)
             instrumental_path = separacion.instrumental
             vocals_path = separacion.voz
 

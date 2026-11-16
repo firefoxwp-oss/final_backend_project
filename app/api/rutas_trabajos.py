@@ -204,6 +204,7 @@ def _a_respuesta(job: Job, posicion=None) -> JobResponse:
         stage=job.stage,
         progress=job.progress,
         video_type=job.video_type,
+        separation_model=job.separation_model,
         project_id=job.project_id,
         duration_seconds=job.duration_seconds,
         error=job.error,

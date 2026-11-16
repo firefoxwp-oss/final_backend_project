@@ -104,6 +104,11 @@ class ColaTrabajos:
         self.db.commit()
         print(f"[job {job.id}] {progress}% - {stage}")
 
+    def registrar_modelo(self, job: Job, modelo: str) -> None:
+        """Guarda el modelo de separacion utilizado (demucs o spleeter)."""
+        job.separation_model = modelo
+        self.db.commit()
+
     def registrar_archivo(
         self, job: Job, path: str, formato: str, tipo: str
     ) -> None:
