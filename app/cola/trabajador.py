@@ -34,6 +34,8 @@ from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
 from app.database import SessionLocal
 from app.karaoke import generar_karaoke_desde_main, get_video_resolution
 from app.models import Job, Media
+from app.separacion.separador_demucs import SeparadorDemucs
+from app.separacion.separador_spleeter import SeparadorSpleeter
 from app.subtitles import config_video_desde_resolucion, convertir_srt_a_ass
 
 INTERVALO_SEG = float(os.getenv("TRABAJADOR_INTERVALO_SEG", "2"))
@@ -42,8 +44,13 @@ INTERVALO_CANCELACION_SEG = 1
 
 
 class Trabajador:
-    def __init__(self, intervalo: float = INTERVALO_SEG):
+    def __init__(self, intervalo: float = INTERVALO_SEG, separadores=None):
         self.intervalo = intervalo
+        # Demucs es el modelo principal y Spleeter el respaldo automatico
+        self.separadores = separadores or [
+            SeparadorDemucs(),
+            SeparadorSpleeter(),
+        ]
         self._apagar = False
         self._proceso_actual = None
 
@@ -125,6 +132,27 @@ class Trabajador:
         if codigo != 0:
             raise subprocess.CalledProcessError(codigo, cmd)
 
+    def separar(self, job_id: str, audio: str, carpeta: str):
+        """Separa la voz con el primer modelo que funcione.
+
+        Devuelve el resultado y el nombre del modelo utilizado.
+        """
+        for i, separador in enumerate(self.separadores):
+            try:
+                resultado = separador.separar(
+                    audio, carpeta, lambda cmd: self._ejecutar(job_id, cmd)
+                )
+                return resultado, separador.nombre
+            except TrabajoCancelado:
+                raise
+            except Exception as e:
+                if i == len(self.separadores) - 1:
+                    raise
+                print(
+                    f"[job {job_id}] {separador.nombre} fallo ({e}); "
+                    "se usa el modelo de respaldo"
+                )
+
     def procesar_siguiente(self) -> bool:
         """Procesa el siguiente trabajo en cola.
 
@@ -204,30 +232,9 @@ class Trabajador:
 
             # 2) Separacion de voces
             cola.avanzar(job, "separando_voces", 15)
-            spleeter = os.getenv("SPLEETER_BIN") or ejecutable_venv(
-                "venv", "spleeter"
-            )
-            self._ejecutar(
-                job_id,
-                [
-                    spleeter,
-                    "separate",
-                    "-p",
-                    "spleeter:2stems",
-                    "-o",
-                    output_dir,
-                    audio_file,
-                ],
-            )
-            audio_basename = os.path.splitext(os.path.basename(audio_file))[0]
-            instrumental_path = os.path.join(
-                output_dir, audio_basename, "accompaniment.wav"
-            )
-            vocals_path = os.path.join(
-                output_dir, audio_basename, "vocals.wav"
-            )
-            if not os.path.exists(instrumental_path):
-                raise RuntimeError("Archivo instrumental no encontrado")
+            separacion, _modelo = self.separar(job_id, audio_file, output_dir)
+            instrumental_path = separacion.instrumental
+            vocals_path = separacion.voz
 
             os.makedirs(audio_permanent_dir, exist_ok=True)
             shutil.copy2(instrumental_path, permanent_instrumental)
