@@ -107,11 +107,14 @@ class Trabajador:
             os.killpg(os.getpgid(proceso.pid), signal.SIGKILL)
         proceso.wait()
 
-    def _ejecutar(self, job_id: str, cmd, cwd=None, salida=None) -> None:
+    def _ejecutar(
+        self, job_id: str, cmd, cwd=None, salida=None, entorno=None
+    ) -> None:
         """Ejecuta un programa externo; lo detiene si se cancela el trabajo."""
         self._proceso_actual = subprocess.Popen(
             cmd,
             cwd=cwd,
+            env=entorno,
             stdout=salida,
             stderr=subprocess.STDOUT if salida else None,
             start_new_session=os.name != "nt",
@@ -140,7 +143,11 @@ class Trabajador:
         for i, separador in enumerate(self.separadores):
             try:
                 resultado = separador.separar(
-                    audio, carpeta, lambda cmd: self._ejecutar(job_id, cmd)
+                    audio,
+                    carpeta,
+                    lambda cmd, entorno=None: self._ejecutar(
+                        job_id, cmd, entorno=entorno
+                    ),
                 )
                 return resultado, separador.nombre
             except TrabajoCancelado:
