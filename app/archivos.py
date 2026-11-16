@@ -97,6 +97,31 @@ def ejecutable_venv(venv: str, nombre: str) -> str:
     return os.path.join(DIR_PROYECTO, venv, "bin", nombre)
 
 
+def tiene_video(path: str) -> bool:
+    """Indica si el archivo tiene una pista de video; la caratula de un MP3
+    no cuenta como video."""
+    try:
+        out = subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v",
+                "-show_entries",
+                "stream_disposition=attached_pic",
+                "-of",
+                "csv=p=0",
+                path.replace("\\", "/"),
+            ],
+            text=True,
+            timeout=30,
+        )
+    except Exception:
+        return False
+    return any(linea.strip() == "0" for linea in out.splitlines())
+
+
 def duracion_segundos(path: str):
     try:
         out = subprocess.check_output(

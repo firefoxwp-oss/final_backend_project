@@ -31,6 +31,7 @@ from app.archivos import (
     ruta_letra,
     ruta_origen,
     ruta_pista_comprimida,
+    tiene_video,
 )
 from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
 from app.database import SessionLocal
@@ -48,6 +49,9 @@ from app.subtitles import config_video_desde_resolucion, convertir_srt_a_ass
 INTERVALO_SEG = float(os.getenv("TRABAJADOR_INTERVALO_SEG", "2"))
 # Cada cuanto se comprueba si el trabajo en proceso fue cancelado
 INTERVALO_CANCELACION_SEG = 1
+# Fondo del video de un archivo solo de audio
+COLOR_FONDO = "0x101828"
+TAMANO_FONDO = "1280x720"
 
 
 class Trabajador:
@@ -243,18 +247,8 @@ class Trabajador:
                     "-y",
                 ],
             )
-            self._ejecutar(
-                job_id,
-                [
-                    "ffmpeg",
-                    "-i",
-                    input_temp,
-                    "-c",
-                    "copy",
-                    "-an",
-                    video_sin_audio_file,
-                    "-y",
-                ],
+            self.extraer_video(
+                job_id, input_temp, video_sin_audio_file, job.duration_seconds
             )
             cola.registrar_archivo(job, audio_file, "wav", "audio")
             cola.registrar_archivo(job, video_sin_audio_file, "mp4", "video")
@@ -366,6 +360,37 @@ class Trabajador:
                         pass
             if os.path.exists(output_dir):
                 shutil.rmtree(output_dir, ignore_errors=True)
+
+    def extraer_video(
+        self, job_id: str, origen: str, destino: str, duracion
+    ) -> None:
+        """Copia el video sin audio; un archivo solo de audio (MP3) recibe un
+        fondo liso de la misma duracion, sobre el que se arman el
+        instrumental y el karaoke."""
+        if tiene_video(origen):
+            comando = ["ffmpeg", "-i", origen, "-c", "copy", "-an", destino]
+        else:
+            if not duracion:
+                raise ValueError("No se pudo leer la duracion del audio")
+            comando = [
+                "ffmpeg",
+                "-f",
+                "lavfi",
+                "-i",
+                f"color=c={COLOR_FONDO}:s={TAMANO_FONDO}:r=25",
+                "-t",
+                str(duracion),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-tune",
+                "stillimage",
+                "-pix_fmt",
+                "yuv420p",
+                destino,
+            ]
+        self._ejecutar(job_id, comando + ["-y"])
 
     def transcribir_y_generar_karaoke(
         self,
