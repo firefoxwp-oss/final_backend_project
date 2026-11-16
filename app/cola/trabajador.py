@@ -21,16 +21,18 @@ from app.archivos import (
     DIR_PROYECTO,
     DIR_SRT,
     DIR_VIDEOS,
+    archivos_del_trabajo,
     crear_directorios,
     duracion_segundos,
     ejecutable_venv,
+    eliminar_rutas,
     ruta_instrumental,
     ruta_origen,
 )
 from app.cola.cola_trabajos import ColaTrabajos
 from app.database import SessionLocal
 from app.karaoke import generar_karaoke_desde_main, get_video_resolution
-from app.models import Job
+from app.models import Job, Media
 from app.subtitles import config_video_desde_resolucion, convertir_srt_a_ass
 
 INTERVALO_SEG = float(os.getenv("TRABAJADOR_INTERVALO_SEG", "2"))
@@ -47,6 +49,7 @@ class Trabajador:
 
     def ejecutar(self) -> None:
         crear_directorios()
+        self.recuperar_trabajos_tras_reinicio()
         print(f"[trabajador] esperando trabajos (cada {self.intervalo:g} s)")
         while not self._detener:
             try:
@@ -57,6 +60,17 @@ class Trabajador:
                 traceback.print_exc()
                 time.sleep(self.intervalo)
         print("[trabajador] detenido")
+
+    def recuperar_trabajos_tras_reinicio(self) -> None:
+        with SessionLocal() as db:
+            for job_id in ColaTrabajos(db).recuperar_trabajos_tras_reinicio():
+                self.eliminar_archivos_parciales(db, job_id)
+
+    def eliminar_archivos_parciales(self, db, job_id: str) -> None:
+        """Borra los archivos y registros de un trabajo que no termino."""
+        db.query(Media).filter(Media.job_id == job_id).delete()
+        db.commit()
+        eliminar_rutas(archivos_del_trabajo(job_id))
 
     def procesar_siguiente(self) -> bool:
         """Procesa el siguiente trabajo en cola. Devuelve False si no habia ninguno."""

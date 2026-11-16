@@ -77,6 +77,25 @@ class ColaTrabajos:
         job.finished_at = _ahora()
         self.db.commit()
 
+    def recuperar_trabajos_tras_reinicio(self) -> list:
+        """Marca con error los trabajos interrumpidos por un reinicio.
+
+        Los trabajos en cola no se tocan: el trabajador los retoma en orden.
+        Devuelve los ids de los interrumpidos para limpiar sus archivos parciales.
+        """
+        interrumpidos = self.db.query(Job).filter(Job.status == "running").all()
+        for job in interrumpidos:
+            job.status = "error"
+            job.error = "El procesamiento se interrumpio por un reinicio del servidor"
+            job.finished_at = _ahora()
+        self.db.commit()
+        en_cola = self.db.query(Job).filter(Job.status == "queued").count()
+        print(
+            f"[cola] recuperacion: {len(interrumpidos)} interrumpidos, "
+            f"{en_cola} en cola para retomar"
+        )
+        return [job.id for job in interrumpidos]
+
     def marcar_error(self, job: Job, mensaje: str) -> None:
         job.status = "error"
         job.error = mensaje
