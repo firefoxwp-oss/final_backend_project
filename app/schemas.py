@@ -92,6 +92,10 @@ class JobResponse(BaseModel):
     duration_seconds: Optional[int] = None
     error: Optional[str] = None
     created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    # Posicion en la cola (1 = el siguiente); solo mientras espera
+    queue_position: Optional[int] = None
     artifacts: Dict[str, bool] = {}
 
     class Config:
