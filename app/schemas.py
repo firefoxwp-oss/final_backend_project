@@ -79,6 +79,13 @@ class TrabajoEncolado(BaseModel):
     status: str
 
 
+class TrabajoCanceladoRespuesta(BaseModel):
+    """Respuesta de la cancelacion de un trabajo."""
+
+    job_id: str
+    status: str
+
+
 class JobResponse(BaseModel):
     """Entrada del historial de trabajos."""
 

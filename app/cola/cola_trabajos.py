@@ -12,6 +12,10 @@ from sqlalchemy.orm import Session
 from app.models import Job, Media
 
 
+class TrabajoCancelado(Exception):
+    """El usuario cancelo el trabajo mientras se procesaba."""
+
+
 def _ahora():
     return datetime.now(timezone.utc)
 
@@ -37,6 +41,33 @@ class ColaTrabajos:
             .with_for_update(skip_locked=True)
             .first()
         )
+
+    def obtener(self, job_id: str, usuario_id: int) -> Job:
+        """Trabajo del usuario, bloqueado hasta el fin de la transaccion.
+
+        El bloqueo evita que la cancelacion y el inicio del procesamiento se
+        crucen. Lanza LookupError si no existe y PermissionError si es ajeno.
+        """
+        job = (
+            self.db.query(Job)
+            .filter(Job.id == job_id)
+            .with_for_update()
+            .first()
+        )
+        if job is None:
+            raise LookupError("Trabajo no encontrado")
+        if job.user_id != usuario_id:
+            raise PermissionError("No autorizado")
+        return job
+
+    def marcar_cancelado(self, job: Job) -> None:
+        job.status = "cancelled"
+        job.finished_at = _ahora()
+        self.db.commit()
+
+    def esta_cancelado(self, job_id: str) -> bool:
+        estado = self.db.query(Job.status).filter(Job.id == job_id).scalar()
+        return estado == "cancelled"
 
     def posiciones(self) -> dict:
         """Posicion de cada trabajo en cola (1 es el siguiente)."""
@@ -91,6 +122,8 @@ class ColaTrabajos:
         self, job: Job, archivos: list, video_type: str
     ) -> None:
         """Cierra el trabajo solo si existen sus archivos obligatorios."""
+        if self.esta_cancelado(job.id):
+            raise TrabajoCancelado()
         faltantes = [p for p in archivos if not os.path.exists(p)]
         if faltantes:
             raise RuntimeError(
@@ -129,6 +162,8 @@ class ColaTrabajos:
         return [job.id for job in interrumpidos]
 
     def marcar_error(self, job: Job, mensaje: str) -> None:
+        if self.esta_cancelado(job.id):
+            return
         job.status = "error"
         job.error = mensaje
         job.finished_at = _ahora()

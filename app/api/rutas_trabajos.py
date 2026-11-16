@@ -19,8 +19,10 @@ from app.archivos import (
     DIR_ASS,
     DIR_AUDIOS,
     DIR_SRT,
+    archivos_del_trabajo,
     crear_directorios,
     duracion_segundos,
+    eliminar_rutas,
     ruta_instrumental as _ruta_instrumental,
     ruta_karaoke as _ruta_karaoke,
     ruta_origen,
@@ -28,7 +30,11 @@ from app.archivos import (
 from app.auth import get_current_user, get_current_user_media, get_db
 from app.cola.cola_trabajos import ColaTrabajos
 from app.models import TIPOS_VIDEO, Job, Media, Project, User
-from app.schemas import JobResponse, TrabajoEncolado
+from app.schemas import (
+    JobResponse,
+    TrabajoCanceladoRespuesta,
+    TrabajoEncolado,
+)
 
 router = APIRouter(tags=["trabajos"])
 
@@ -221,6 +227,42 @@ def estado_job(
     """
     job = _job_propio(job_id, db, current_user)
     return _a_respuesta(job, ColaTrabajos(db).posicion_en_cola(job))
+
+
+@router.post(
+    "/jobs/{job_id}/cancelar", response_model=TrabajoCanceladoRespuesta
+)
+def cancelar_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cancela un trabajo en cola o en proceso.
+
+    Un trabajo en cola sale de ella; uno en proceso lo detiene el trabajador
+    en pocos segundos y elimina sus archivos parciales.
+    """
+    cola = ColaTrabajos(db)
+    try:
+        job = cola.obtener(job_id, current_user.id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="No autorizado")
+
+    if job.status not in ("queued", "running"):
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Solo se puede cancelar un trabajo en cola o en proceso",
+        )
+
+    estaba_en_cola = job.status == "queued"
+    cola.marcar_cancelado(job)
+    if estaba_en_cola:
+        # Nadie lo esta procesando: se borra aqui el archivo subido
+        eliminar_rutas(archivos_del_trabajo(job.id))
+    return TrabajoCanceladoRespuesta(job_id=job.id, status=job.status)
 
 
 @router.delete("/jobs/{job_id}", status_code=204)

@@ -12,6 +12,7 @@ import os
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 import traceback
 
@@ -29,29 +30,33 @@ from app.archivos import (
     ruta_instrumental,
     ruta_origen,
 )
-from app.cola.cola_trabajos import ColaTrabajos
+from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
 from app.database import SessionLocal
 from app.karaoke import generar_karaoke_desde_main, get_video_resolution
 from app.models import Job, Media
 from app.subtitles import config_video_desde_resolucion, convertir_srt_a_ass
 
 INTERVALO_SEG = float(os.getenv("TRABAJADOR_INTERVALO_SEG", "2"))
+# Cada cuanto se comprueba si el trabajo en proceso fue cancelado
+INTERVALO_CANCELACION_SEG = 1
 
 
 class Trabajador:
     def __init__(self, intervalo: float = INTERVALO_SEG):
         self.intervalo = intervalo
-        self._detener = False
+        self._apagar = False
+        self._proceso_actual = None
 
-    def detener(self, *_):
+    def apagar(self, *_):
+        """Detiene el servicio al terminar el paso en curso."""
         print("[trabajador] deteniendo...")
-        self._detener = True
+        self._apagar = True
 
     def ejecutar(self) -> None:
         crear_directorios()
         self.recuperar_trabajos_tras_reinicio()
         print(f"[trabajador] esperando trabajos (cada {self.intervalo:g} s)")
-        while not self._detener:
+        while not self._apagar:
             try:
                 if not self.procesar_siguiente():
                     time.sleep(self.intervalo)
@@ -71,6 +76,54 @@ class Trabajador:
         db.query(Media).filter(Media.job_id == job_id).delete()
         db.commit()
         eliminar_rutas(archivos_del_trabajo(job_id))
+
+    def _cancelado(self, job_id: str) -> bool:
+        with SessionLocal() as db:
+            return ColaTrabajos(db).esta_cancelado(job_id)
+
+    def comprobar_cancelacion(self, job_id: str) -> None:
+        if self._cancelado(job_id):
+            raise TrabajoCancelado()
+
+    def detener(self, job_id: str) -> None:
+        """Termina el programa externo en curso y sus subprocesos."""
+        proceso = self._proceso_actual
+        if proceso is None or proceso.poll() is not None:
+            return
+        print(f"[job {job_id}] cancelado: deteniendo el procesamiento")
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proceso.pid)],
+                capture_output=True,
+            )
+        else:
+            os.killpg(os.getpgid(proceso.pid), signal.SIGKILL)
+        proceso.wait()
+
+    def _ejecutar(self, job_id: str, cmd, cwd=None, salida=None) -> None:
+        """Ejecuta un programa externo; lo detiene si se cancela el trabajo."""
+        self._proceso_actual = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            stdout=salida,
+            stderr=subprocess.STDOUT if salida else None,
+            start_new_session=os.name != "nt",
+        )
+        try:
+            while True:
+                try:
+                    codigo = self._proceso_actual.wait(
+                        timeout=INTERVALO_CANCELACION_SEG
+                    )
+                    break
+                except subprocess.TimeoutExpired:
+                    if self._cancelado(job_id):
+                        self.detener(job_id)
+                        raise TrabajoCancelado()
+        finally:
+            self._proceso_actual = None
+        if codigo != 0:
+            raise subprocess.CalledProcessError(codigo, cmd)
 
     def procesar_siguiente(self) -> bool:
         """Procesa el siguiente trabajo en cola.
@@ -118,7 +171,8 @@ class Trabajador:
 
             # 1) Audio y video sin audio
             cola.avanzar(job, "extrayendo_audio", 8)
-            subprocess.run(
+            self._ejecutar(
+                job_id,
                 [
                     "ffmpeg",
                     "-i",
@@ -131,9 +185,9 @@ class Trabajador:
                     audio_file,
                     "-y",
                 ],
-                check=True,
             )
-            subprocess.run(
+            self._ejecutar(
+                job_id,
                 [
                     "ffmpeg",
                     "-i",
@@ -144,7 +198,6 @@ class Trabajador:
                     video_sin_audio_file,
                     "-y",
                 ],
-                check=True,
             )
             cola.registrar_archivo(job, audio_file, "wav", "audio")
             cola.registrar_archivo(job, video_sin_audio_file, "mp4", "video")
@@ -154,7 +207,8 @@ class Trabajador:
             spleeter = os.getenv("SPLEETER_BIN") or ejecutable_venv(
                 "venv", "spleeter"
             )
-            subprocess.run(
+            self._ejecutar(
+                job_id,
                 [
                     spleeter,
                     "separate",
@@ -164,7 +218,6 @@ class Trabajador:
                     output_dir,
                     audio_file,
                 ],
-                check=True,
             )
             audio_basename = os.path.splitext(os.path.basename(audio_file))[0]
             instrumental_path = os.path.join(
@@ -188,7 +241,8 @@ class Trabajador:
 
             # 3) Video instrumental
             cola.avanzar(job, "generando_instrumental", 40)
-            subprocess.run(
+            self._ejecutar(
+                job_id,
                 [
                     "ffmpeg",
                     "-i",
@@ -204,7 +258,6 @@ class Trabajador:
                     final_filename,
                     "-y",
                 ],
-                check=True,
             )
             cola.registrar_archivo(
                 job, final_filename, "mp4", "video_instrumental"
@@ -227,6 +280,8 @@ class Trabajador:
                     print(f"[job {job_id}] ERROR en subtitulos/karaoke: {e}")
                     traceback.print_exc()
 
+            # Un fallo en la etapa anterior puede deberse a una cancelacion
+            self.comprobar_cancelacion(job_id)
             cola.marcar_terminado(
                 job,
                 [
@@ -238,6 +293,11 @@ class Trabajador:
                 "karaoke" if video_karaoke_path else "instrumental",
             )
             print(f"[trabajador] {job_id} terminado")
+
+        except TrabajoCancelado:
+            cola.db.rollback()
+            print(f"[job {job_id}] cancelado por el usuario")
+            self.eliminar_archivos_parciales(cola.db, job_id)
 
         except Exception as e:
             cola.db.rollback()
@@ -272,16 +332,25 @@ class Trabajador:
         )
         audio_in = vocals_path if os.path.exists(vocals_path) else audio_file
         script_path = os.path.join(DIR_PROYECTO, "app", "whisperx_run.py")
-        resultado = subprocess.run(
-            [whisperx_py, script_path, "--audio", audio_in, "--srt", srt_path],
-            check=False,
-            cwd=DIR_PROYECTO,
-            capture_output=True,
-            text=True,
-        )
-        if resultado.returncode != 0:
-            print(resultado.stderr)
-            raise RuntimeError("WhisperX fallo")
+        with tempfile.TemporaryFile(mode="w+") as log:
+            try:
+                self._ejecutar(
+                    job.id,
+                    [
+                        whisperx_py,
+                        script_path,
+                        "--audio",
+                        audio_in,
+                        "--srt",
+                        srt_path,
+                    ],
+                    cwd=DIR_PROYECTO,
+                    salida=log,
+                )
+            except subprocess.CalledProcessError:
+                log.seek(0)
+                print(log.read()[-2000:])
+                raise RuntimeError("WhisperX fallo")
         if not os.path.exists(srt_path):
             raise FileNotFoundError(f"WhisperX no genero el SRT: {srt_path}")
 
@@ -298,7 +367,9 @@ class Trabajador:
         if not os.path.exists(ass_path):
             return None
         cola.avanzar(job, "generando_karaoke", 85)
-        resultado_karaoke = generar_karaoke_desde_main(job.id)
+        resultado_karaoke = generar_karaoke_desde_main(
+            job.id, lambda cmd, log: self._ejecutar(job.id, cmd, salida=log)
+        )
         if not resultado_karaoke["success"]:
             print(
                 f"[job {job.id}] Error karaoke: "
@@ -312,8 +383,8 @@ class Trabajador:
 
 def main() -> None:
     trabajador = Trabajador()
-    signal.signal(signal.SIGTERM, trabajador.detener)
-    signal.signal(signal.SIGINT, trabajador.detener)
+    signal.signal(signal.SIGTERM, trabajador.apagar)
+    signal.signal(signal.SIGINT, trabajador.apagar)
     trabajador.ejecutar()
 
 
