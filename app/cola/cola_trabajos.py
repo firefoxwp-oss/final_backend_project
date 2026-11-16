@@ -142,6 +142,11 @@ class ColaTrabajos:
         job.finished_at = _ahora()
         self.db.commit()
 
+    def marcar_notificado(self, job: Job) -> None:
+        """Registra que el usuario recibio la notificacion de fin (Pb-4)."""
+        job.notified_at = _ahora()
+        self.db.commit()
+
     def recuperar_trabajos_tras_reinicio(self) -> list:
         """Marca con error los trabajos interrumpidos por un reinicio.
 

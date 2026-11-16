@@ -150,6 +150,8 @@ class Job(Base):
     )
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
+    # Envio de la notificacion de finalizacion (Pb-4)
+    notified_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(_en("status", ESTADOS_JOB), name="ck_jobs_status"),

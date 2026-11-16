@@ -34,6 +34,7 @@ from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
 from app.database import SessionLocal
 from app.karaoke import generar_karaoke_desde_main, get_video_resolution
 from app.models import Job, Media
+from app.notificaciones.notificador import Notificador
 from app.separacion.separador_demucs import SeparadorDemucs
 from app.separacion.separador_spleeter import SeparadorSpleeter
 from app.subtitles import config_video_desde_resolucion, convertir_srt_a_ass
@@ -44,13 +45,19 @@ INTERVALO_CANCELACION_SEG = 1
 
 
 class Trabajador:
-    def __init__(self, intervalo: float = INTERVALO_SEG, separadores=None):
+    def __init__(
+        self,
+        intervalo: float = INTERVALO_SEG,
+        separadores=None,
+        notificador=None,
+    ):
         self.intervalo = intervalo
         # Demucs es el modelo principal y Spleeter el respaldo automatico
         self.separadores = separadores or [
             SeparadorDemucs(),
             SeparadorSpleeter(),
         ]
+        self.notificador = notificador or Notificador()
         self._apagar = False
         self._proceso_actual = None
 
@@ -174,6 +181,9 @@ class Trabajador:
             cola.marcar_procesando(job)
             print(f"[trabajador] procesando {job.id} ({job.source_filename})")
             self.procesar(cola, job)
+            # Terminado o con error: se avisa al celular del usuario (Pb-4)
+            db.refresh(job)
+            self.notificador.notificar_fin(cola, job)
             return True
 
     def procesar(self, cola: ColaTrabajos, job: Job) -> None:
