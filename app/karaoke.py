@@ -9,7 +9,7 @@ import json
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -58,10 +58,14 @@ def verificar_propiedad(job_id: str, db: Session, user: User) -> Job:
 
 
 # Función utilitaria para ser llamada desde main.py
-def generar_karaoke_desde_main(job_id: str) -> Dict[str, Any]:
+def generar_karaoke_desde_main(
+    job_id: str, ejecutar: Optional[Callable] = None
+) -> Dict[str, Any]:
     """
-    Función para ser llamada desde main.py después del procesamiento principal.
     Genera el video karaoke de forma síncrona y retorna el resultado.
+
+    `ejecutar(cmd, log)` permite al trabajador lanzar FFmpeg de forma que
+    pueda detenerlo si el trabajo se cancela.
     """
     try:
         rutas = resolver_rutas_karaoke(job_id)
@@ -70,7 +74,7 @@ def generar_karaoke_desde_main(job_id: str) -> Dict[str, Any]:
         info_archivos = validar_archivos_entrada_karaoke(rutas)
 
         # Generar video karaoke
-        video_karaoke = componer_video_karaoke(rutas)
+        video_karaoke = componer_video_karaoke(rutas, ejecutar)
 
         return {
             "success": True,
@@ -236,7 +240,20 @@ def validar_archivos_entrada_karaoke(rutas: Dict[str, Path]) -> Dict[str, Any]:
     }
 
 
-def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
+def _ejecutar_ffmpeg(cmd, log_file) -> None:
+    subprocess.run(
+        cmd,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=True,
+        timeout=FFMPEG_TIMEOUT_COMPOSICION,
+    )
+
+
+def componer_video_karaoke(
+    rutas: Dict[str, Path], ejecutar: Optional[Callable] = None
+) -> Path:
     """Compone el video karaoke con el video instrumental + subtítulos ASS"""
     ruta_video_instrumental = rutas["ruta_video_instrumental"]
     ruta_subtitulos_ass = rutas["ruta_subtitulos_ass"]
@@ -307,14 +324,7 @@ def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
                 85,
                 "Incrustando subtítulos y codificando video karaoke",
             )
-            subprocess.run(
-                cmd,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=True,
-                timeout=FFMPEG_TIMEOUT_COMPOSICION,
-            )
+            (ejecutar or _ejecutar_ffmpeg)(cmd, log_file)
 
         if not ruta_output.exists():
             raise subprocess.CalledProcessError(
