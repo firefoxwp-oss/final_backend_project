@@ -45,6 +45,21 @@ def ruta_karaoke(job_id: str) -> str:
     return os.path.join(DIR_VIDEOS, f"{job_id}_karaoke.mp4")
 
 
+# Pistas comprimidas del Modo Karaoke: (archivo, WAV de origen)
+PISTAS_COMPRIMIDAS = {
+    "instrumental": ("instrumental.m4a", "accompaniment.wav"),
+    "voz": ("vocals.m4a", "vocals.wav"),
+}
+
+
+def ruta_pista_comprimida(job_id: str, pista: str) -> str:
+    return os.path.join(DIR_AUDIOS, job_id, PISTAS_COMPRIMIDAS[pista][0])
+
+
+def ruta_pista_wav(job_id: str, pista: str) -> str:
+    return os.path.join(DIR_AUDIOS, job_id, PISTAS_COMPRIMIDAS[pista][1])
+
+
 def ruta_letra(job_id: str) -> str:
     return os.path.join(DIR_LETRA, f"{job_id}.json")
 

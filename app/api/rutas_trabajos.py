@@ -26,9 +26,12 @@ from app.archivos import (
     ruta_instrumental as _ruta_instrumental,
     ruta_karaoke as _ruta_karaoke,
     ruta_origen,
+    ruta_pista_comprimida,
+    ruta_pista_wav,
 )
 from app.auth import get_current_user, get_current_user_media, get_db
 from app.cola.cola_trabajos import ColaTrabajos
+from app.karaoke.compresor_audio import CompresorAudio
 from app.models import TIPOS_VIDEO, Job, Media, Project, User
 from app.schemas import (
     JobResponse,
@@ -380,7 +383,32 @@ _TIPOS = {
     "audio_original": ("audio/wav", "original.wav", "inline"),
     "audio_vocals": ("audio/wav", "vocals.wav", "inline"),
     "audio_instrumental": ("audio/wav", "instrumental.wav", "inline"),
+    # Pistas comprimidas del Modo Karaoke (Pb-6)
+    "instrumental_comprimido": ("audio/mp4", "instrumental.m4a", "inline"),
+    "voz_comprimida": ("audio/mp4", "vocals.m4a", "inline"),
 }
+
+# Tipo de descarga -> (pista, tipo de archivo en media)
+_COMPRIMIDAS = {
+    "instrumental_comprimido": ("instrumental", "playback_instrumental"),
+    "voz_comprimida": ("voz", "playback_vocals"),
+}
+
+
+def _asegurar_comprimida(db: Session, job: Job, tipo: str) -> None:
+    """Las canciones procesadas antes del Sprint 2 no tienen las pistas
+    comprimidas: se generan la primera vez que se piden y se conservan."""
+    pista, tipo_media = _COMPRIMIDAS[tipo]
+    destino = ruta_pista_comprimida(job.id, pista)
+    origen = ruta_pista_wav(job.id, pista)
+    if os.path.exists(destino) or not os.path.exists(origen):
+        return
+    # Se escribe en un archivo temporal para que dos peticiones a la vez no
+    # sirvan una pista a medio generar
+    temporal = f"{destino[:-4]}.{uuid.uuid4().hex}.m4a"
+    CompresorAudio().comprimir(origen, temporal)
+    os.replace(temporal, destino)
+    ColaTrabajos(db).registrar_archivo(job, destino, "m4a", tipo_media)
 
 
 def _ruta_de_tipo(tipo: str, job_id: str):
@@ -395,6 +423,10 @@ def _ruta_de_tipo(tipo: str, job_id: str):
         "audio_instrumental": os.path.join(
             DIR_AUDIOS, job_id, "accompaniment.wav"
         ),
+        "instrumental_comprimido": ruta_pista_comprimida(
+            job_id, "instrumental"
+        ),
+        "voz_comprimida": ruta_pista_comprimida(job_id, "voz"),
     }.get(tipo)
 
 
@@ -457,7 +489,9 @@ def descargar_archivo(
             {"error": "Tipo de archivo no valido"}, status_code=400
         )
 
-    _job_propio(job_id, db, current_user)
+    job = _job_propio(job_id, db, current_user)
+    if tipo in _COMPRIMIDAS:
+        _asegurar_comprimida(db, job, tipo)
 
     media_type, sufijo, disposition = _TIPOS[tipo]
     file_path = _ruta_de_tipo(tipo, job_id)

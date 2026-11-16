@@ -30,6 +30,7 @@ from app.archivos import (
     ruta_instrumental,
     ruta_letra,
     ruta_origen,
+    ruta_pista_comprimida,
 )
 from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
 from app.database import SessionLocal
@@ -210,10 +211,10 @@ class Trabajador:
         )
         permanent_vocals = os.path.join(audio_permanent_dir, "vocals.wav")
         # Pistas comprimidas del Modo Karaoke (Pb-6)
-        reproduccion_instrumental = os.path.join(
-            audio_permanent_dir, "instrumental.m4a"
+        reproduccion_instrumental = ruta_pista_comprimida(
+            job_id, "instrumental"
         )
-        reproduccion_voz = os.path.join(audio_permanent_dir, "vocals.m4a")
+        reproduccion_voz = ruta_pista_comprimida(job_id, "voz")
         video_karaoke_path = None
 
         try:
