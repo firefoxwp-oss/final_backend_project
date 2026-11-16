@@ -47,6 +47,15 @@ from app.auth import (
     get_current_user_media,
     get_db,
 )
+from app.archivos import (
+    DIR_VIDEOS,
+    DIR_AUDIOS,
+    DIR_SRT,
+    DIR_ASS,
+    ruta_instrumental as _ruta_instrumental,
+    ruta_karaoke as _ruta_karaoke,
+    duracion_segundos as _duracion_segundos,
+)
 from app.subtitles import convertir_srt_a_ass, config_video_desde_resolucion
 from app.karaoke import (
     karaoke_router,
@@ -89,20 +98,6 @@ MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_MB", "1024")) * 1024 * 1024
 MAX_DURACION_SEG = int(os.getenv("MAX_DURACION_MIN", "60")) * 60
 EXTENSIONES_PERMITIDAS = {".mp4", ".avi", ".mkv", ".mp3", ".mov", ".m4v", ".webm"}
 
-DIR_VIDEOS = os.path.join("media", "videos")
-DIR_AUDIOS = os.path.join("media", "audios")
-DIR_SRT = os.path.join("media", "subtitulos", "subtitulos_srt")
-DIR_ASS = os.path.join("media", "subtitulos", "subtitulos_ass")
-
-
-def _ruta_instrumental(job_id: str) -> str:
-    return os.path.join(DIR_VIDEOS, f"{job_id}_sin_voces.mp4")
-
-
-def _ruta_karaoke(job_id: str) -> str:
-    return os.path.join(DIR_VIDEOS, f"{job_id}_karaoke.mp4")
-
-
 def _registrar(db, job_id, path, formato, tipo):
     db.add(
         Media(
@@ -121,27 +116,6 @@ def _avanzar(db: Session, job: Job, stage: str, progress: int):
     job.progress = progress
     db.commit()
     print(f"[job {job.id}] {progress}% - {stage}")
-
-
-def _duracion_segundos(path: str):
-    try:
-        out = subprocess.check_output(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                path.replace("\\", "/"),
-            ],
-            text=True,
-            timeout=30,
-        )
-        return float(out.strip())
-    except Exception:
-        return None
 
 
 # --------------------------------------------------------------------- basico
