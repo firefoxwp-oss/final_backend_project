@@ -60,6 +60,14 @@ def ruta_pista_wav(job_id: str, pista: str) -> str:
     return os.path.join(DIR_AUDIOS, job_id, PISTAS_COMPRIMIDAS[pista][1])
 
 
+def ruta_version_tono(job_id: str, pista: str, semitonos: int) -> str:
+    """Pista en otro tono (Pb-11), dentro de la carpeta de la cancion: se
+    elimina junto con ella."""
+    return os.path.join(
+        DIR_AUDIOS, job_id, "tonos", f"{pista}_{semitonos:+d}.m4a"
+    )
+
+
 def ruta_letra(job_id: str) -> str:
     return os.path.join(DIR_LETRA, f"{job_id}.json")
 
