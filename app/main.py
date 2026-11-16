@@ -103,7 +103,7 @@ def _ruta_karaoke(job_id: str) -> str:
     return os.path.join(DIR_VIDEOS, f"{job_id}_karaoke.mp4")
 
 
-def _registrar(db, job_id, user_id, project_id, path, formato, tipo):
+def _registrar(db, job_id, path, formato, tipo):
     db.add(
         Media(
             name=os.path.basename(path),
@@ -111,8 +111,6 @@ def _registrar(db, job_id, user_id, project_id, path, formato, tipo):
             format=formato,
             type=tipo,
             job_id=job_id,
-            user_id=user_id,
-            project_id=project_id,
         )
     )
 
@@ -320,10 +318,8 @@ def procesar_video(
             check=True,
         )
 
-        _registrar(db, session_uuid, current_user.id, project_id,
-                   audio_file, "wav", "audio")
-        _registrar(db, session_uuid, current_user.id, project_id,
-                   video_sin_audio_file, "mp4", "video")
+        _registrar(db, session_uuid, audio_file, "wav", "audio")
+        _registrar(db, session_uuid, video_sin_audio_file, "mp4", "video")
         db.commit()
 
         # 2) Separacion de voces
@@ -352,10 +348,8 @@ def procesar_video(
         permanent_vocals = os.path.join(audio_permanent_dir, "vocals.wav")
         shutil.copy2(instrumental_path, permanent_instrumental)
         shutil.copy2(vocals_path, permanent_vocals)
-        _registrar(db, session_uuid, current_user.id, project_id,
-                   permanent_instrumental, "wav", "audio_instrumental")
-        _registrar(db, session_uuid, current_user.id, project_id,
-                   permanent_vocals, "wav", "audio_vocals")
+        _registrar(db, session_uuid, permanent_instrumental, "wav", "audio_instrumental")
+        _registrar(db, session_uuid, permanent_vocals, "wav", "audio_vocals")
         db.commit()
 
         # 3) Video instrumental
@@ -366,8 +360,7 @@ def procesar_video(
              final_filename, "-y"],
             check=True,
         )
-        _registrar(db, session_uuid, current_user.id, project_id,
-                   final_filename, "mp4", "video_instrumental")
+        _registrar(db, session_uuid, final_filename, "mp4", "video_instrumental")
         db.commit()
 
         # 4) Subtitulos
@@ -408,10 +401,8 @@ def procesar_video(
             convertir_srt_a_ass(srt_path, ass_path, cfg_video=cfg_video)
             print(f"Conversion SRT->ASS completada ({resolucion[0]}x{resolucion[1]})")
 
-            _registrar(db, session_uuid, current_user.id, project_id,
-                       srt_path, "srt", "subtitle")
-            _registrar(db, session_uuid, current_user.id, project_id,
-                       ass_path, "ass", "subtitle")
+            _registrar(db, session_uuid, srt_path, "srt", "subtitle")
+            _registrar(db, session_uuid, ass_path, "ass", "subtitle")
             db.commit()
 
             if os.path.exists(ass_path):
@@ -419,8 +410,7 @@ def procesar_video(
                 resultado_karaoke = generar_karaoke_desde_main(session_uuid)
                 if resultado_karaoke["success"]:
                     video_karaoke_path = resultado_karaoke["video_karaoke_path"]
-                    _registrar(db, session_uuid, current_user.id, project_id,
-                               video_karaoke_path, "mp4", "video_karaoke")
+                    _registrar(db, session_uuid, video_karaoke_path, "mp4", "video_karaoke")
                     db.commit()
                     print(f"Video karaoke generado: {video_karaoke_path}")
                 else:
@@ -856,7 +846,6 @@ def delete_project(
             status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado"
         )
     db.query(Job).filter(Job.project_id == id).update({Job.project_id: None})
-    db.query(Media).filter(Media.project_id == id).update({Media.project_id: None})
     db.delete(project)
     db.commit()
     return
