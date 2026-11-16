@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -61,6 +62,55 @@ def colapsar_repeticiones(word_segments, max_repeticiones=6):
     return limpio, descartadas
 
 
+# Lineas del Modo Karaoke: se cortan en las pausas largas o al llegar a un
+# maximo de palabras, para que cada linea quepa en la pantalla
+MAX_PALABRAS_LINEA = 8
+PAUSA_NUEVA_LINEA_SEG = 1.0
+
+
+def construir_letra(segmentos):
+    """Letra sincronizada por palabra para el Modo Karaoke (Pb-5).
+
+    Parte de los segmentos alineados de WhisperX y devuelve las lineas con el
+    inicio y el fin de cada palabra, en segundos. Se omiten las palabras sin
+    tiempo y los bucles de repeticion.
+    """
+    lineas, actual = [], []
+
+    def cerrar():
+        if actual:
+            lineas.append(
+                {
+                    "inicio": actual[0]["inicio"],
+                    "fin": actual[-1]["fin"],
+                    "palabras": list(actual),
+                }
+            )
+            actual.clear()
+
+    for segmento in segmentos:
+        palabras, _ = colapsar_repeticiones(segmento.get("words") or [])
+        cerrar()
+        for w in palabras:
+            texto = (w.get("word") or "").strip()
+            inicio, fin = w.get("start"), w.get("end")
+            if not texto or inicio is None or fin is None:
+                continue
+            palabra = {
+                "texto": texto,
+                "inicio": round(float(inicio), 3),
+                "fin": round(float(max(fin, inicio)), 3),
+            }
+            pausa = actual and palabra["inicio"] - actual[-1]["fin"]
+            if len(actual) >= MAX_PALABRAS_LINEA or (
+                pausa and pausa >= PAUSA_NUEVA_LINEA_SEG
+            ):
+                cerrar()
+            actual.append(palabra)
+    cerrar()
+    return {"lineas": lineas}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Transcribe audio a SRT palabra a palabra con WhisperX."
@@ -70,6 +120,11 @@ def main():
     )
     parser.add_argument(
         "--srt", required=True, help="Ruta de salida del archivo SRT"
+    )
+    parser.add_argument(
+        "--letra",
+        default=None,
+        help="Ruta de salida de la letra sincronizada (JSON)",
     )
     parser.add_argument(
         "--model", default=None, help="tiny|base|small|medium|large-v2"
@@ -279,6 +334,19 @@ def main():
             f.write("".join(lines))
 
         print(f"SRT creado: {srt_path} ({indice} palabras)", file=sys.stderr)
+
+        if args.letra:
+            letra = construir_letra(aligned.get("segments") or [])
+            carpeta = os.path.dirname(args.letra)
+            if carpeta:
+                os.makedirs(carpeta, exist_ok=True)
+            with open(args.letra, "w", encoding="utf-8") as f:
+                json.dump(letra, f, ensure_ascii=False)
+            print(
+                f"Letra creada: {args.letra} "
+                f"({len(letra['lineas'])} lineas)",
+                file=sys.stderr,
+            )
         print(
             f"[WhisperX] device={device} model={model_name} "
             f"language={language} "

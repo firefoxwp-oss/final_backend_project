@@ -28,6 +28,7 @@ from app.archivos import (
     ejecutable_venv,
     eliminar_rutas,
     ruta_instrumental,
+    ruta_letra,
     ruta_origen,
 )
 from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
@@ -368,6 +369,8 @@ class Trabajador:
                         audio_in,
                         "--srt",
                         srt_path,
+                        "--letra",
+                        ruta_letra(job.id),
                     ],
                     cwd=DIR_PROYECTO,
                     salida=log,
@@ -388,6 +391,8 @@ class Trabajador:
         )
         cola.registrar_archivo(job, srt_path, "srt", "subtitle")
         cola.registrar_archivo(job, ass_path, "ass", "subtitle")
+        if os.path.exists(ruta_letra(job.id)):
+            cola.registrar_archivo(job, ruta_letra(job.id), "json", "lyrics")
 
         if not os.path.exists(ass_path):
             return None
