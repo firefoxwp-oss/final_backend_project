@@ -9,7 +9,7 @@ import json
 import subprocess
 import threading
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Callable, Dict, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -58,10 +58,14 @@ def verificar_propiedad(job_id: str, db: Session, user: User) -> Job:
 
 
 # Función utilitaria para ser llamada desde main.py
-def generar_karaoke_desde_main(job_id: str) -> Dict[str, Any]:
+def generar_karaoke_desde_main(
+    job_id: str, ejecutar: Optional[Callable] = None
+) -> Dict[str, Any]:
     """
-    Función para ser llamada desde main.py después del procesamiento principal.
     Genera el video karaoke de forma síncrona y retorna el resultado.
+
+    `ejecutar(cmd, log)` permite al trabajador lanzar FFmpeg de forma que
+    pueda detenerlo si el trabajo se cancela.
     """
     try:
         rutas = resolver_rutas_karaoke(job_id)
@@ -70,7 +74,7 @@ def generar_karaoke_desde_main(job_id: str) -> Dict[str, Any]:
         info_archivos = validar_archivos_entrada_karaoke(rutas)
 
         # Generar video karaoke
-        video_karaoke = componer_video_karaoke(rutas)
+        video_karaoke = componer_video_karaoke(rutas, ejecutar)
 
         return {
             "success": True,
@@ -87,7 +91,11 @@ def generar_karaoke_desde_main(job_id: str) -> Dict[str, Any]:
         )
         return {"success": False, "error": error_msg, "job_id": job_id}
     except Exception as e:
-        return {"success": False, "error": f"Error interno: {str(e)}", "job_id": job_id}
+        return {
+            "success": False,
+            "error": f"Error interno: {str(e)}",
+            "job_id": job_id,
+        }
 
 
 # Modelos Pydantic para respuestas
@@ -124,21 +132,25 @@ def buscar_archivo_ass_inteligente(job_id: str) -> Path:
         if ruta_candidata.exists():
             return ruta_candidata
 
-    # Si no existe ninguno, devolver el formato preferido (para error específico)
+    # Si no existe ninguno, devolver el formato preferido (para el error)
     return base_path / f"{job_id}.ass"
 
 
 def resolver_rutas_karaoke(job_id: str) -> Dict[str, Path]:
-    """Resuelve rutas usando la estructura del proyecto principal para el servicio karaoke"""
+    """Resuelve las rutas del proyecto principal para el servicio karaoke"""
 
     # Rutas del proyecto principal con búsqueda inteligente
     rutas = {
         # Video instrumental final del proyecto principal (raíz del proyecto)
-        "ruta_video_instrumental": Path("media") / "videos" / f"{job_id}_sin_voces.mp4",
+        "ruta_video_instrumental": Path("media")
+        / "videos"
+        / f"{job_id}_sin_voces.mp4",
         # Subtítulos ASS del proyecto principal (búsqueda inteligente)
         "ruta_subtitulos_ass": buscar_archivo_ass_inteligente(job_id),
         # Salida del video karaoke final
-        "ruta_video_karaoke": Path("media") / "videos" / f"{job_id}_karaoke.mp4",
+        "ruta_video_karaoke": Path("media")
+        / "videos"
+        / f"{job_id}_karaoke.mp4",
         # Metadatos para tracking de karaoke
         "dir_metadatos": Path("media") / "metadatos" / "karaoke" / job_id,
         "archivo_estado": Path("media")
@@ -146,7 +158,11 @@ def resolver_rutas_karaoke(job_id: str) -> Dict[str, Path]:
         / "karaoke"
         / job_id
         / "estado.json",
-        "archivo_log": Path("media") / "metadatos" / "karaoke" / job_id / "ffmpeg.log",
+        "archivo_log": Path("media")
+        / "metadatos"
+        / "karaoke"
+        / job_id
+        / "ffmpeg.log",
     }
 
     return rutas
@@ -192,7 +208,7 @@ def get_video_resolution(path: Path):
 
 
 def validar_archivos_entrada_karaoke(rutas: Dict[str, Path]) -> Dict[str, Any]:
-    """Valida que existan los archivos necesarios del proyecto principal para karaoke"""
+    """Valida que existan los archivos necesarios para el karaoke"""
     ruta_video = rutas["ruta_video_instrumental"]
     ruta_ass = rutas["ruta_subtitulos_ass"]
 
@@ -224,8 +240,21 @@ def validar_archivos_entrada_karaoke(rutas: Dict[str, Path]) -> Dict[str, Any]:
     }
 
 
-def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
-    """Compone el video karaoke usando el video instrumental + subtítulos ASS"""
+def _ejecutar_ffmpeg(cmd, log_file) -> None:
+    subprocess.run(
+        cmd,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=True,
+        timeout=FFMPEG_TIMEOUT_COMPOSICION,
+    )
+
+
+def componer_video_karaoke(
+    rutas: Dict[str, Path], ejecutar: Optional[Callable] = None
+) -> Path:
+    """Compone el video karaoke con el video instrumental + subtítulos ASS"""
     ruta_video_instrumental = rutas["ruta_video_instrumental"]
     ruta_subtitulos_ass = rutas["ruta_subtitulos_ass"]
     ruta_output = rutas["ruta_video_karaoke"]
@@ -252,7 +281,7 @@ def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
     ruta_output_str = str(ruta_output).replace("\\", "/")
 
     # Escapar caracteres especiales en la ruta del filtro subtitles
-    # En Windows, los dos puntos en las rutas de Windows (C:) necesitan escaparse
+    # En Windows, los dos puntos de las rutas (C:) necesitan escaparse
     ruta_subs_escaped = ruta_subs_str.replace(":", r"\:")
 
     cmd = [
@@ -278,8 +307,12 @@ def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
 
         print("Incrustando subtítulos ASS con ffmpeg...")
         with open(ruta_log, "a", encoding="utf-8") as log_file:
-            log_file.write(f"=== Composición final karaoke - {datetime.now()} ===\n")
-            log_file.write(f"Video instrumental (usado): {ruta_video_actual}\n")
+            log_file.write(
+                f"=== Composición final karaoke - {datetime.now()} ===\n"
+            )
+            log_file.write(
+                f"Video instrumental (usado): {ruta_video_actual}\n"
+            )
             log_file.write(f"Subtítulos ASS: {ruta_subtitulos_ass}\n")
             log_file.write(f"Output: {ruta_output}\n")
             log_file.write(f"Comando: {' '.join(cmd)}\n\n")
@@ -291,17 +324,12 @@ def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
                 85,
                 "Incrustando subtítulos y codificando video karaoke",
             )
-            proceso = subprocess.run(
-                cmd,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                text=True,
-                check=True,
-                timeout=FFMPEG_TIMEOUT_COMPOSICION,
-            )
+            (ejecutar or _ejecutar_ffmpeg)(cmd, log_file)
 
         if not ruta_output.exists():
-            raise subprocess.CalledProcessError(1, cmd, "Video karaoke no generado")
+            raise subprocess.CalledProcessError(
+                1, cmd, "Video karaoke no generado"
+            )
 
         # Actualizar estado final
         actualizar_estado_karaoke(
@@ -314,7 +342,10 @@ def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
             status_code=500,
             detail={
                 "codigo": "500_FFMPEG_TIMEOUT",
-                "mensaje": f"Timeout en composición: proceso excedió {FFMPEG_TIMEOUT_COMPOSICION} segundos",
+                "mensaje": (
+                    "Timeout en composición: proceso excedió "
+                    f"{FFMPEG_TIMEOUT_COMPOSICION} segundos"
+                ),
             },
         )
     except subprocess.CalledProcessError as e:
@@ -325,14 +356,16 @@ def componer_video_karaoke(rutas: Dict[str, Path]) -> Path:
                 with open(ruta_log, "r", encoding="utf-8") as f:
                     log_content = f.read()
                     error_details += f". Log: {log_content[-500:]}"
-            except:
+            except Exception:
                 pass
 
         raise HTTPException(
             status_code=500,
             detail={
                 "codigo": "500_FFMPEG_ERROR",
-                "mensaje": f"Error en composición de video karaoke: {error_details}",
+                "mensaje": (
+                    f"Error en composición de video karaoke: {error_details}"
+                ),
             },
         )
 
@@ -358,7 +391,7 @@ def actualizar_estado_karaoke(
                 estado_previo = json.load(f)
                 if estado_previo.get("error"):
                     info_estado["error"] = estado_previo["error"]
-        except:
+        except Exception:
             pass
 
     with open(archivo_estado, "w", encoding="utf-8") as f:
@@ -376,17 +409,20 @@ def ejecutar_pipeline_karaoke(job_id: str):
 
         # 1. Validar archivos de entrada del proyecto principal
         actualizar_estado_karaoke(
-            rutas, "validando_archivos", 20, "Validando archivos del proyecto principal"
+            rutas,
+            "validando_archivos",
+            20,
+            "Validando archivos del proyecto principal",
         )
 
-        info_archivos = validar_archivos_entrada_karaoke(rutas)
+        validar_archivos_entrada_karaoke(rutas)
 
         # 2. Componer video karaoke directamente
         actualizar_estado_karaoke(
             rutas, "generando_video", 50, "Componiendo video karaoke"
         )
 
-        video_karaoke = componer_video_karaoke(rutas)
+        componer_video_karaoke(rutas)
 
         # 3. Finalizar
         actualizar_estado_karaoke(
@@ -394,7 +430,7 @@ def ejecutar_pipeline_karaoke(job_id: str):
         )
 
     except HTTPException as e:
-        # Extraer el mensaje del detalle si es un dict, sino usar el detalle completo
+        # Extraer el mensaje si el detalle es un dict, si no usar el detalle
         if isinstance(e.detail, dict):
             mensaje_error = e.detail.get("mensaje", str(e.detail))
         else:
@@ -404,7 +440,9 @@ def ejecutar_pipeline_karaoke(job_id: str):
         actualizar_estado_error_karaoke(rutas, f"Error interno: {str(e)}")
 
 
-def actualizar_estado_error_karaoke(rutas: Dict[str, Path], mensaje_error: str):
+def actualizar_estado_error_karaoke(
+    rutas: Dict[str, Path], mensaje_error: str
+):
     """Actualiza el estado a error con mensaje"""
     try:
         asegurar_carpetas(rutas["dir_metadatos"])
@@ -485,11 +523,15 @@ async def ejecutar_karaoke(
             "generando_video",
         ]:
             return RespuestaEjecutar(
-                job_id=job_id, status="processing", mensaje="Job ya en procesamiento"
+                job_id=job_id,
+                status="processing",
+                mensaje="Job ya en procesamiento",
             )
 
         # 4. Iniciar procesamiento asíncrono
-        actualizar_estado_karaoke(rutas, "queued", 0, "Job encolado para procesamiento")
+        actualizar_estado_karaoke(
+            rutas, "queued", 0, "Job encolado para procesamiento"
+        )
 
         # Ejecutar en hilo separado para no bloquear FastAPI
         hilo_procesamiento = threading.Thread(
@@ -560,7 +602,9 @@ async def descargar_video_karaoke(
                 status_code=404,
                 detail={
                     "codigo": "404_VIDEO_NO_ENCONTRADO",
-                    "mensaje": f"Video karaoke no encontrado para job {job_id}",
+                    "mensaje": (
+                        f"Video karaoke no encontrado para job {job_id}"
+                    ),
                 },
             )
 
@@ -589,7 +633,9 @@ async def descargar_video_karaoke(
             filename=f"karaoke_{job_id}.mp4",
             media_type="video/mp4",
             headers={
-                "Content-Disposition": f"attachment; filename=karaoke_{job_id}.mp4"
+                "Content-Disposition": (
+                    f"attachment; filename=karaoke_{job_id}.mp4"
+                )
             },
         )
 
@@ -635,7 +681,9 @@ async def preview_video_karaoke(
                 status_code=404,
                 detail={
                     "codigo": "404_VIDEO_NO_ENCONTRADO",
-                    "mensaje": f"Video karaoke no encontrado para job {job_id}",
+                    "mensaje": (
+                        f"Video karaoke no encontrado para job {job_id}"
+                    ),
                 },
             )
 
@@ -655,7 +703,9 @@ async def preview_video_karaoke(
             media_type="video/mp4",
             filename=f"karaoke_{job_id}_preview.mp4",
             headers={
-                "Content-Disposition": f'inline; filename="karaoke_{job_id}_preview.mp4"',
+                "Content-Disposition": (
+                    f'inline; filename="karaoke_{job_id}_preview.mp4"'
+                ),
                 "Accept-Ranges": "bytes",
                 "Cache-Control": "no-cache",
             },
@@ -666,6 +716,7 @@ async def preview_video_karaoke(
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
 
         raise HTTPException(
@@ -685,7 +736,9 @@ async def info_karaoke():
     return {
         "servicio": "Servicio Video Karaoke",
         "version": "1.0.0",
-        "descripcion": "Sistema integrado que usa archivos del proyecto principal",
+        "descripcion": (
+            "Sistema integrado que usa archivos del proyecto principal"
+        ),
         "endpoints": {
             "ejecutar": "POST /karaoke/ejecutar/{job_id}",
             "estado": "GET /karaoke/estado/{job_id}",
@@ -699,7 +752,10 @@ async def info_karaoke():
             "subtitulos_ass": "media/subtitulos/subtitulos_ass/{job_id}.ass",
         },
         "salida": {"video_karaoke": "media/videos/{job_id}_karaoke.mp4"},
-        "configuracion": {"preset_x264": KARAOKE_PRESET_X264, "crf": KARAOKE_CRF},
+        "configuracion": {
+            "preset_x264": KARAOKE_PRESET_X264,
+            "crf": KARAOKE_CRF,
+        },
     }
 
 
@@ -712,10 +768,13 @@ async def health_check_karaoke():
         ffmpeg_ok = False
         try:
             subprocess.run(
-                ["ffmpeg", "-version"], capture_output=True, check=True, timeout=5
+                ["ffmpeg", "-version"],
+                capture_output=True,
+                check=True,
+                timeout=5,
             )
             ffmpeg_ok = True
-        except:
+        except Exception:
             pass
 
         # Verificar estructura de directorios del proyecto principal
@@ -735,10 +794,12 @@ async def health_check_karaoke():
             test_file.write_text("test")
             test_file.unlink()
             write_ok = True
-        except:
+        except Exception:
             pass
 
-        status = "healthy" if (ffmpeg_ok and dirs_ok and write_ok) else "unhealthy"
+        status = (
+            "healthy" if (ffmpeg_ok and dirs_ok and write_ok) else "unhealthy"
+        )
 
         return {
             "status": status,

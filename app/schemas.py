@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 from datetime import datetime
 
 
@@ -72,6 +72,20 @@ class JobStatus(BaseModel):
         from_attributes = True
 
 
+class TrabajoEncolado(BaseModel):
+    """Respuesta de la subida: el trabajo queda en la cola."""
+
+    job_id: str
+    status: str
+
+
+class TrabajoCanceladoRespuesta(BaseModel):
+    """Respuesta de la cancelacion de un trabajo."""
+
+    job_id: str
+    status: str
+
+
 class JobResponse(BaseModel):
     """Entrada del historial de trabajos."""
 
@@ -81,11 +95,51 @@ class JobResponse(BaseModel):
     stage: Optional[str] = None
     progress: int
     video_type: Optional[str] = None
+    separation_model: Optional[str] = None
     project_id: Optional[int] = None
     duration_seconds: Optional[int] = None
     error: Optional[str] = None
     created_at: datetime
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    # Posicion en la cola (1 = el siguiente); solo mientras espera
+    queue_position: Optional[int] = None
     artifacts: Dict[str, bool] = {}
+
+    class Config:
+        from_attributes = True
+
+
+class PalabraLetra(BaseModel):
+    texto: str
+    inicio: float
+    fin: float
+
+
+class LineaLetra(BaseModel):
+    inicio: float
+    fin: float
+    palabras: List[PalabraLetra]
+
+
+class LetraRespuesta(BaseModel):
+    """Letra sincronizada por palabra del Modo Karaoke (Pb-5)."""
+
+    lineas: List[LineaLetra]
+
+
+class DispositivoRegistro(BaseModel):
+    """Celular que se registra para recibir notificaciones (Pb-4)."""
+
+    token: str = Field(min_length=1, max_length=255)
+    platform: str = "android"
+
+
+class DispositivoRespuesta(BaseModel):
+    id: int
+    platform: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

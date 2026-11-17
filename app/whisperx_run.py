@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -40,8 +41,8 @@ def colapsar_repeticiones(word_segments, max_repeticiones=6):
     """Elimina bucles de decodificacion.
 
     Whisper puede quedarse repitiendo la misma palabra decenas de veces sobre
-    vocales sostenidas o ad-libs. Se conservan unas pocas repeticiones (legitimas
-    en una cancion) y se descarta el resto.
+    vocales sostenidas o ad-libs. Se conservan unas pocas repeticiones
+    (legitimas en una cancion) y se descarta el resto.
     """
     limpio = []
     anterior = None
@@ -61,16 +62,80 @@ def colapsar_repeticiones(word_segments, max_repeticiones=6):
     return limpio, descartadas
 
 
+# Lineas del Modo Karaoke: se cortan en las pausas largas o al llegar a un
+# maximo de palabras, para que cada linea quepa en la pantalla
+MAX_PALABRAS_LINEA = 8
+PAUSA_NUEVA_LINEA_SEG = 1.0
+
+
+def construir_letra(segmentos):
+    """Letra sincronizada por palabra para el Modo Karaoke (Pb-5).
+
+    Parte de los segmentos alineados de WhisperX y devuelve las lineas con el
+    inicio y el fin de cada palabra, en segundos. Se omiten las palabras sin
+    tiempo y los bucles de repeticion.
+    """
+    lineas, actual = [], []
+
+    def cerrar():
+        if actual:
+            lineas.append(
+                {
+                    "inicio": actual[0]["inicio"],
+                    "fin": actual[-1]["fin"],
+                    "palabras": list(actual),
+                }
+            )
+            actual.clear()
+
+    for segmento in segmentos:
+        palabras, _ = colapsar_repeticiones(segmento.get("words") or [])
+        cerrar()
+        for w in palabras:
+            texto = (w.get("word") or "").strip()
+            inicio, fin = w.get("start"), w.get("end")
+            if not texto or inicio is None or fin is None:
+                continue
+            palabra = {
+                "texto": texto,
+                "inicio": round(float(inicio), 3),
+                "fin": round(float(max(fin, inicio)), 3),
+            }
+            pausa = actual and palabra["inicio"] - actual[-1]["fin"]
+            if len(actual) >= MAX_PALABRAS_LINEA or (
+                pausa and pausa >= PAUSA_NUEVA_LINEA_SEG
+            ):
+                cerrar()
+            actual.append(palabra)
+    cerrar()
+    return {"lineas": lineas}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Transcribe audio a SRT palabra a palabra con WhisperX."
     )
-    parser.add_argument("--audio", required=True, help="Ruta del audio a transcribir")
-    parser.add_argument("--srt", required=True, help="Ruta de salida del archivo SRT")
-    parser.add_argument("--model", default=None, help="tiny|base|small|medium|large-v2")
+    parser.add_argument(
+        "--audio", required=True, help="Ruta del audio a transcribir"
+    )
+    parser.add_argument(
+        "--srt", required=True, help="Ruta de salida del archivo SRT"
+    )
+    parser.add_argument(
+        "--letra",
+        default=None,
+        help="Ruta de salida de la letra sincronizada (JSON)",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="tiny|base|small|medium|large-v2|large-v3-turbo",
+    )
     parser.add_argument("--device", default=None, choices=["cpu", "cuda"])
     parser.add_argument("--batch-size", type=int, default=None)
-    parser.add_argument("--language", default=None, help="Codigo ISO (es, en, ...)")
+    parser.add_argument(
+        "--language", default=None, help="Codigo ISO (es, en, ...)"
+    )
     args = parser.parse_args()
 
     audio_path = args.audio
@@ -92,6 +157,12 @@ def main():
         print(f"[WhisperX] Audio: {audio_path}", file=sys.stderr)
         print(f"[WhisperX] Output SRT: {srt_path}", file=sys.stderr)
 
+        # Modelos guardados en el proyecto: con ellos no se descarga nada
+        modelos = project_root / "pretrained_models" / "whisperx" / "modelo"
+        if modelos.is_dir():
+            os.environ.setdefault("NLTK_DATA", str(modelos / "nltk_data"))
+            os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
         import torch
         import whisperx
 
@@ -103,6 +174,9 @@ def main():
             or ("cuda" if torch.cuda.is_available() else "cpu")
         )
         model_name = args.model or env("WHISPERX_MODEL") or "medium"
+        local = modelos / f"faster-whisper-{model_name}"
+        if local.is_dir():
+            model_name = str(local)
         compute_type = env("WHISPERX_COMPUTE_TYPE") or (
             "float16" if device == "cuda" else "int8"
         )
@@ -126,11 +200,14 @@ def main():
         if mkl:
             os.environ["MKL_NUM_THREADS"] = str(mkl)
 
-        # Umbrales de rechazo. Whisper alucina texto sobre el residuo musical que
-        # deja la separacion de voces (frases inventadas en tramos sin canto) y
-        # entra en bucle sobre notas sostenidas. Estos limites los recortan.
+        # Umbrales de rechazo. Whisper alucina texto sobre el residuo musical
+        # que deja la separacion de voces (frases inventadas en tramos sin
+        # canto) y entra en bucle sobre notas sostenidas. Estos limites los
+        # recortan.
         asr_options = {
-            "compression_ratio_threshold": as_float("WHISPERX_COMPRESSION_RATIO", 2.0),
+            "compression_ratio_threshold": as_float(
+                "WHISPERX_COMPRESSION_RATIO", 2.0
+            ),
             "log_prob_threshold": as_float("WHISPERX_LOGPROB", -0.8),
             "no_speech_threshold": as_float("WHISPERX_NO_SPEECH", 0.75),
             "condition_on_previous_text": False,
@@ -152,28 +229,48 @@ def main():
             )
         except TypeError:
             # Compatibilidad con versiones que no aceptan estas opciones
-            print("[WhisperX] asr_options no soportado, usando defaults",
-                  file=sys.stderr)
+            print(
+                "[WhisperX] asr_options no soportado, usando defaults",
+                file=sys.stderr,
+            )
             model = whisperx.load_model(
-                model_name, device, compute_type=compute_type, language=language
+                model_name,
+                device,
+                compute_type=compute_type,
+                language=language,
             )
 
         audio = whisperx.load_audio(audio_path)
-        print(f"[WhisperX] Audio cargado ({len(audio) / 16000:.2f}s)", file=sys.stderr)
+        print(
+            f"[WhisperX] Audio cargado ({len(audio) / 16000:.2f}s)",
+            file=sys.stderr,
+        )
 
         result = model.transcribe(audio, batch_size=batch_size)
         print("[WhisperX] Transcripcion completada", file=sys.stderr)
 
-        align_model_name = env("WHISPERX_ALIGN_MODEL") or ALIGN_MODELS.get(language)
-        print(f"[WhisperX] Alineando (modelo: {align_model_name or 'default'})",
-              file=sys.stderr)
+        align_model_name = env("WHISPERX_ALIGN_MODEL") or ALIGN_MODELS.get(
+            language
+        )
+        if align_model_name:
+            local = modelos / align_model_name.split("/")[-1]
+            if local.is_dir():
+                align_model_name = str(local)
+        print(
+            f"[WhisperX] Alineando (modelo: {align_model_name or 'default'})",
+            file=sys.stderr,
+        )
         try:
             align_model, metadata = whisperx.load_align_model(
-                language_code=language, device=device, model_name=align_model_name
+                language_code=language,
+                device=device,
+                model_name=align_model_name,
             )
         except Exception as e:
-            print(f"[WhisperX] Fallback al alineador por defecto: {e}",
-                  file=sys.stderr)
+            print(
+                f"[WhisperX] Fallback al alineador por defecto: {e}",
+                file=sys.stderr,
+            )
             align_model, metadata = whisperx.load_align_model(
                 language_code=language, device=device
             )
@@ -189,15 +286,20 @@ def main():
         print("[WhisperX] Alineamiento completado", file=sys.stderr)
 
         word_segments = aligned.get("word_segments") or []
-        print(f"[WhisperX] Palabras alineadas: {len(word_segments)}", file=sys.stderr)
+        print(
+            f"[WhisperX] Palabras alineadas: {len(word_segments)}",
+            file=sys.stderr,
+        )
 
         word_segments, descartadas = colapsar_repeticiones(word_segments)
         if descartadas:
-            print(f"[WhisperX] Repeticiones descartadas: {descartadas}",
-                  file=sys.stderr)
+            print(
+                f"[WhisperX] Repeticiones descartadas: {descartadas}",
+                file=sys.stderr,
+            )
 
-        # Numeracion correlativa: antes el indice se incrementaba tambien para las
-        # palabras descartadas, dejando huecos en la numeracion del SRT.
+        # Numeracion correlativa: antes el indice se incrementaba tambien para
+        # las palabras descartadas, dejando huecos en la numeracion del SRT.
         lines = []
         indice = 0
         sin_tiempo = 0
@@ -222,8 +324,10 @@ def main():
             )
 
         if sin_tiempo:
-            print(f"[WhisperX] Palabras sin timestamp omitidas: {sin_tiempo}",
-                  file=sys.stderr)
+            print(
+                f"[WhisperX] Palabras sin timestamp omitidas: {sin_tiempo}",
+                file=sys.stderr,
+            )
 
         destino = os.path.dirname(srt_path)
         if destino:
@@ -232,13 +336,30 @@ def main():
             f.write("".join(lines))
 
         print(f"SRT creado: {srt_path} ({indice} palabras)", file=sys.stderr)
+
+        if args.letra:
+            letra = construir_letra(aligned.get("segments") or [])
+            carpeta = os.path.dirname(args.letra)
+            if carpeta:
+                os.makedirs(carpeta, exist_ok=True)
+            with open(args.letra, "w", encoding="utf-8") as f:
+                json.dump(letra, f, ensure_ascii=False)
+            print(
+                f"Letra creada: {args.letra} "
+                f"({len(letra['lineas'])} lineas)",
+                file=sys.stderr,
+            )
         print(
-            f"[WhisperX] device={device} model={model_name} language={language} "
+            f"[WhisperX] device={device} model={model_name} "
+            f"language={language} "
             f"palabras={indice}"
         )
 
     except ImportError as e:
-        print(f"ERROR: No se pudo importar modulo requerido: {e}", file=sys.stderr)
+        print(
+            f"ERROR: No se pudo importar modulo requerido: {e}",
+            file=sys.stderr,
+        )
         sys.exit(1)
     except FileNotFoundError as e:
         print(f"ERROR: Archivo no encontrado: {e}", file=sys.stderr)
