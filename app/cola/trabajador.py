@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import time
 import traceback
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from app.archivos import (
     DIR_AUDIOS,
@@ -70,6 +71,8 @@ class Trabajador:
         ]
         self.notificador = notificador or Notificador()
         self.compresor = CompresorAudio()
+        # Comprime las pistas del Modo Karaoke mientras sigue el procesamiento
+        self._hilos = ThreadPoolExecutor(max_workers=1)
         self._apagar = False
         self._proceso_actual = None
 
@@ -225,6 +228,7 @@ class Trabajador:
         )
         reproduccion_voz = ruta_pista_comprimida(job_id, "voz")
         video_karaoke_path = None
+        compresion = None
 
         try:
             if not os.path.exists(input_temp):
@@ -274,18 +278,15 @@ class Trabajador:
             cola.registrar_archivo(
                 job, permanent_vocals, "wav", "audio_vocals"
             )
-            ejecutar = lambda cmd: self._ejecutar(job_id, cmd)  # noqa: E731
-            self.compresor.comprimir(
-                permanent_instrumental, reproduccion_instrumental, ejecutar
-            )
-            self.compresor.comprimir(
-                permanent_vocals, reproduccion_voz, ejecutar
-            )
-            cola.registrar_archivo(
-                job, reproduccion_instrumental, "m4a", "playback_instrumental"
-            )
-            cola.registrar_archivo(
-                job, reproduccion_voz, "m4a", "playback_vocals"
+            # Las pistas comprimidas no hacen falta hasta el final: se
+            # generan mientras se transcribe, y la separacion termina antes
+            # (mejora de RR-03)
+            compresion = self._hilos.submit(
+                self.comprimir_pistas,
+                [
+                    (permanent_instrumental, reproduccion_instrumental),
+                    (permanent_vocals, reproduccion_voz),
+                ],
             )
 
             # 3) Video instrumental
@@ -331,6 +332,13 @@ class Trabajador:
 
             # Un fallo en la etapa anterior puede deberse a una cancelacion
             self.comprobar_cancelacion(job_id)
+            compresion.result()
+            cola.registrar_archivo(
+                job, reproduccion_instrumental, "m4a", "playback_instrumental"
+            )
+            cola.registrar_archivo(
+                job, reproduccion_voz, "m4a", "playback_vocals"
+            )
             cola.marcar_terminado(
                 job,
                 [
@@ -348,9 +356,12 @@ class Trabajador:
         except TrabajoCancelado:
             cola.db.rollback()
             print(f"[job {job_id}] cancelado por el usuario")
+            # Se espera la compresion para no dejar pistas a medio escribir
+            self._esperar(compresion)
             self.eliminar_archivos_parciales(cola.db, job_id)
 
         except Exception as e:
+            self._esperar(compresion)
             cola.db.rollback()
             print(f"[job {job_id}] ERROR: {e}")
             cola.marcar_error(job, str(e))
@@ -365,6 +376,20 @@ class Trabajador:
                         pass
             if os.path.exists(output_dir):
                 shutil.rmtree(output_dir, ignore_errors=True)
+
+    def comprimir_pistas(self, pistas) -> None:
+        """Comprime cada (wav, destino) para el Modo Karaoke (Pb-6)."""
+        for wav, destino in pistas:
+            self.compresor.comprimir(wav, destino)
+
+    @staticmethod
+    def _esperar(tarea: Future) -> None:
+        if tarea is None:
+            return
+        try:
+            tarea.result()
+        except Exception as e:
+            print(f"[trabajador] la compresion de las pistas fallo: {e}")
 
     def extraer_video(
         self, job_id: str, origen: str, destino: str, duracion
