@@ -34,6 +34,7 @@ from app.archivos import (
     tiene_video,
 )
 from app.cola.cola_trabajos import ColaTrabajos, TrabajoCancelado
+from app.cola.medidor_etapas import MedidorEtapas
 from app.database import SessionLocal
 from app.karaoke.compresor_audio import CompresorAudio
 from app.karaoke.video_karaoke import (
@@ -191,9 +192,13 @@ class Trabajador:
                 return False
             cola.marcar_procesando(job)
             print(f"[trabajador] procesando {job.id} ({job.source_filename})")
+            medidor = MedidorEtapas(job.id)
+            cola.al_avanzar = medidor.etapa
             self.procesar(cola, job)
-            # Terminado o con error: se avisa al celular del usuario (Pb-4)
             db.refresh(job)
+            if job.status == "done":
+                medidor.terminar(job.duration_seconds)
+            # Terminado o con error: se avisa al celular del usuario (Pb-4)
             self.notificador.notificar_fin(cola, job)
             return True
 
