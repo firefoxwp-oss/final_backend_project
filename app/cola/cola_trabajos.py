@@ -21,8 +21,10 @@ def _ahora():
 
 
 class ColaTrabajos:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, al_avanzar=None):
         self.db = db
+        # Recibe cada etapa nueva, p. ej. para medir su tiempo
+        self.al_avanzar = al_avanzar
 
     def encolar(self, job: Job) -> str:
         job.status = "queued"
@@ -103,6 +105,8 @@ class ColaTrabajos:
         job.progress = progress
         self.db.commit()
         print(f"[job {job.id}] {progress}% - {stage}")
+        if self.al_avanzar is not None:
+            self.al_avanzar(stage)
 
     def registrar_modelo(self, job: Job, modelo: str) -> None:
         """Guarda el modelo de separacion utilizado (demucs o spleeter)."""

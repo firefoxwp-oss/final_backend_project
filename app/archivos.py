@@ -68,6 +68,11 @@ def ruta_version_tono(job_id: str, pista: str, semitonos: int) -> str:
     )
 
 
+def ruta_tiempos(job_id: str) -> str:
+    """Tiempo de cada etapa del procesamiento (mejora del Sprint 3)."""
+    return os.path.join("media", "metadatos", "tiempos", f"{job_id}.json")
+
+
 def ruta_letra(job_id: str) -> str:
     return os.path.join(DIR_LETRA, f"{job_id}.json")
 
@@ -82,6 +87,7 @@ def archivos_del_trabajo(job_id: str) -> list:
         os.path.join(DIR_ASS, f"{job_id}.ass"),
         ruta_letra(job_id),
         os.path.join("media", "metadatos", "karaoke", job_id),
+        ruta_tiempos(job_id),
         f"output_{job_id}",
     ]
     return rutas
