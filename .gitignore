@@ -49,3 +49,6 @@ frontend/
 
 # Pruebas
 .pytest_cache/
+
+# Huella de las dependencias instaladas en el servidor (deploy/)
+.requisitos_instalados

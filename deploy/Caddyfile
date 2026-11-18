@@ -1,0 +1,6 @@
+# Publica la API con HTTPS; Caddy obtiene y renueva el certificado de
+# Let's Encrypt. DOMINIO se reemplaza al instalar (subdominio de DuckDNS).
+DOMINIO {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}

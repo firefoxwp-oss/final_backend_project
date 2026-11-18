@@ -1,0 +1,8 @@
+[Unit]
+Description=Despliegue de la rama main del servidor Karaoke
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/opt/karaoke/final_backend_project/deploy/desplegar.sh
