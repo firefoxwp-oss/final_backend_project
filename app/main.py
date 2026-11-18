@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, status
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.database import engine
@@ -32,6 +33,11 @@ from app.api import rutas_dispositivos, rutas_karaoke, rutas_trabajos
 
 Base.metadata.create_all(bind=engine)
 aplicar_migraciones(engine)
+
+MENSAJE_TERMINOS = (
+    "Debes aceptar los términos y condiciones y la política de "
+    "privacidad para crear tu cuenta."
+)
 
 app = FastAPI()
 
@@ -66,6 +72,11 @@ def root():
 
 @app.post("/register", response_model=UserResponse)
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    if not user.acepta_terminos:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=MENSAJE_TERMINOS,
+        )
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(
@@ -73,7 +84,12 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered",
         )
     hashed_password = get_password_hash(user.password)
-    db_user = User(name=user.name, email=user.email, password=hashed_password)
+    db_user = User(
+        name=user.name,
+        email=user.email,
+        password=hashed_password,
+        terminos_aceptados_en=datetime.now(timezone.utc),
+    )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
