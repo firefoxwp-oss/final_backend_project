@@ -43,6 +43,9 @@ PLATAFORMAS = ("android",)
 # Sprint 3: pistas que se generan en otro tono (Pb-11)
 PISTAS_TONO = ("instrumental", "vocals")
 TONO_MAXIMO = 6
+# Plan freemium: el plan gratuito procesa pocas canciones al mes
+PLANES = ("gratuito", "premium")
+LIMITE_PLAN_GRATUITO = 3
 
 
 def _en(columna: str, valores) -> str:
@@ -88,6 +91,14 @@ class User(Base):
     name = Column(String(120), nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
     password = Column(String(255), nullable=False)
+    plan = Column(
+        String(10),
+        nullable=False,
+        default="gratuito",
+        server_default="gratuito",
+    )
+    # Cuándo aceptó los términos y condiciones y la política de privacidad
+    terminos_aceptados_en = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

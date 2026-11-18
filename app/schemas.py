@@ -10,11 +10,16 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(min_length=6)
+    # Debe aceptar los terminos y la politica de privacidad para registrarse
+    acepta_terminos: bool = False
 
 
 class UserResponse(UserBase):
     id: int
     created_at: datetime
+    plan: str = "gratuito"
+    # Canciones que le quedan en el mes; None si su plan no tiene limite
+    canciones_restantes: Optional[int] = None
 
     class Config:
         from_attributes = True
