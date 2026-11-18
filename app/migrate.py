@@ -38,6 +38,12 @@ _COLUMNAS = [
         "ALTER TABLE users ADD COLUMN plan VARCHAR(10) NOT NULL "
         "DEFAULT 'gratuito'",
     ),
+    # Aceptacion de los terminos y la politica de privacidad al registrarse
+    (
+        "users",
+        "terminos_aceptados_en",
+        "ALTER TABLE users ADD COLUMN terminos_aceptados_en TIMESTAMPTZ",
+    ),
 ]
 
 _INDICES = [

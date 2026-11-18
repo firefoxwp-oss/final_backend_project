@@ -97,6 +97,8 @@ class User(Base):
         default="gratuito",
         server_default="gratuito",
     )
+    # Cuándo aceptó los términos y condiciones y la política de privacidad
+    terminos_aceptados_en = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
