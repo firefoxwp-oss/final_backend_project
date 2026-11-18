@@ -11,7 +11,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  estandar:
+    # flake8 y black, en las versiones fijadas, requieren Python 3.11 o superior
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Herramientas
+        run: pip install -r requirements-dev.txt
+
+      - name: Estándar de codificación (PEP 8)
+        run: |
+          flake8 app tests
+          black --check -l 79 app tests
+
   pruebas:
+    # Python 3.10, el mismo del servidor de producción (Ubuntu 22.04)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -47,12 +66,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Dependencias
-        run: pip install -r requirements.txt -r requirements-dev.txt
-
-      - name: Estándar de codificación (PEP 8)
         run: |
-          flake8 app tests
-          black --check -l 79 app tests
+          pip install -r requirements.txt $(grep -E '^(pytest|psutil)==' requirements-dev.txt)
 
       - name: Pruebas
         run: pytest -q -m "not lento and not red"
