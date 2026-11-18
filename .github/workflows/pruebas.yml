@@ -70,4 +70,4 @@ jobs:
           pip install -r requirements.txt $(grep -E '^(pytest|psutil)==' requirements-dev.txt)
 
       - name: Pruebas
-        run: pytest -q -m "not lento and not red"
+        run: python -m pytest -q -m "not lento and not red"
