@@ -1,0 +1,18 @@
+[Unit]
+Description=API REST del sistema Karaoke (FastAPI)
+After=network.target postgresql.service
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/karaoke/final_backend_project
+EnvironmentFile=/opt/karaoke/final_backend_project/.env
+Environment=PYTHONUNBUFFERED=1
+# Solo escucha en el propio servidor: Caddy la publica con HTTPS
+ExecStart=/opt/karaoke/final_backend_project/venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
