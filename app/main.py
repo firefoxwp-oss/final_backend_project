@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import engine
 from app.migrate import aplicar_migraciones
+from app.planes import canciones_restantes
 from app.models import Base, User, Project, Job
 from app.schemas import (
     UserCreate,
@@ -116,8 +117,13 @@ def refresh_token(token_data: TokenRefresh):
 
 
 @app.get("/me", response_model=UserResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+def get_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    respuesta = UserResponse.model_validate(current_user)
+    respuesta.canciones_restantes = canciones_restantes(db, current_user)
+    return respuesta
 
 
 # ------------------------------------------------------------------ proyectos

@@ -15,6 +15,9 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: int
     created_at: datetime
+    plan: str = "gratuito"
+    # Canciones que le quedan en el mes; None si su plan no tiene limite
+    canciones_restantes: Optional[int] = None
 
     class Config:
         from_attributes = True

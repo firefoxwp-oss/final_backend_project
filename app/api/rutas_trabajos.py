@@ -33,6 +33,7 @@ from app.auth import get_current_user, get_current_user_media, get_db
 from app.cola.cola_trabajos import ColaTrabajos
 from app.karaoke.compresor_audio import CompresorAudio
 from app.models import TIPOS_VIDEO, Job, Media, Project, User
+from app.planes import MENSAJE_LIMITE, canciones_restantes
 from app.schemas import (
     JobResponse,
     TrabajoCanceladoRespuesta,
@@ -87,6 +88,9 @@ def procesar_video(
             detail="Tipo de video no valido. Admitidos: "
             + ", ".join(TIPOS_VIDEO),
         )
+
+    if canciones_restantes(db, current_user) == 0:
+        raise HTTPException(status_code=403, detail=MENSAJE_LIMITE)
 
     if project_id is not None:
         proyecto = db.query(Project).filter(Project.id == project_id).first()
