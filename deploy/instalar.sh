@@ -34,7 +34,10 @@ sudo apt-get update -y
 sudo apt-get install -y python3.10-venv python3-dev build-essential git curl \
     ffmpeg libsndfile1 postgresql postgresql-contrib \
     debian-keyring debian-archive-keyring apt-transport-https gnupg
-ffmpeg -hide_banner -filters | grep -q rubberband \
+# Se guarda la lista antes de buscar: con pipefail, «grep -q» corta la tubería
+# y FFmpeg termina con error aunque el filtro exista
+FILTROS=$(ffmpeg -hide_banner -filters 2>/dev/null)
+grep -q rubberband <<< "$FILTROS" \
     || { echo "FFmpeg no tiene el filtro rubberband (cambio de tono)"; exit 1; }
 
 echo "== 3. Memoria de intercambio (4 GB) para los modelos de IA"
