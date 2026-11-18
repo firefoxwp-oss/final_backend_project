@@ -1,0 +1,7 @@
+[Unit]
+Description=Verificación periódica del estado de la API y del trabajador
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/opt/karaoke/final_backend_project/deploy/verificar.sh

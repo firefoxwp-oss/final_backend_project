@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 # Instalación del servidor en Ubuntu Server 22.04 (Amazon EC2): paquetes del
 # sistema, PostgreSQL, los dos entornos de Python, los modelos de IA, los
-# servicios systemd, el despliegue automático y Caddy con HTTPS.
+# servicios systemd, DuckDNS, la verificación periódica del estado, el
+# despliegue automático, el agente de CloudWatch y Caddy con HTTPS.
 #
-# Requisitos: el repositorio clonado en /opt/karaoke/final_backend_project y su
-# archivo .env completo (ver deploy/env.ejemplo).
-# Uso: bash deploy/instalar.sh <subdominio>.duckdns.org
+# Requisitos:
+#   - el repositorio clonado en /opt/karaoke/final_backend_project;
+#   - su archivo .env completo (ver deploy/env.ejemplo);
+#   - /opt/karaoke/duckdns.env con el subdominio y el token (ver deploy/duckdns.ejemplo).
+# Uso: bash deploy/instalar.sh
 # Se puede volver a ejecutar sin problema: cada paso comprueba si ya se hizo.
 set -euo pipefail
 
-DOMINIO="${1:?Indica el dominio, p. ej.: bash deploy/instalar.sh softtech-karaoke.duckdns.org}"
 APP=/opt/karaoke/final_backend_project
 cd "$APP"
 [ -f .env ] || { echo "Falta $APP/.env (copia deploy/env.ejemplo y complétalo)"; exit 1; }
-set -a; . ./.env; set +a
-for v in DB_USER DB_PASSWORD DB_NAME JWT_SECRET_KEY; do
-    [ -n "${!v:-}" ] || { echo "Falta $v en .env"; exit 1; }
+[ -f /opt/karaoke/duckdns.env ] || { echo "Falta /opt/karaoke/duckdns.env (ver deploy/duckdns.ejemplo)"; exit 1; }
+set -a; . ./.env; . /opt/karaoke/duckdns.env; set +a
+for v in DB_USER DB_PASSWORD DB_NAME JWT_SECRET_KEY DUCKDNS_SUBDOMINIO DUCKDNS_TOKEN; do
+    [ -n "${!v:-}" ] || { echo "Falta $v"; exit 1; }
 done
+DOMINIO="$DUCKDNS_SUBDOMINIO.duckdns.org"
+chmod 600 .env /opt/karaoke/duckdns.env
+chmod +x deploy/*.sh
 
 echo "== 1. Espacio en disco"
 LIBRE_GB=$(df --output=avail -BG / | tail -1 | tr -dc '0-9')
@@ -60,14 +66,28 @@ venv_torch/bin/python pretrained_models/descargar_modelos.py
 
 echo "== 7. Servicios del sistema"
 mkdir -p media /opt/karaoke/respaldos
-chmod +x deploy/desplegar.sh
-for s in api.service trabajador-cola.service despliegue.service despliegue.timer; do
+for s in api.service trabajador-cola.service despliegue.service despliegue.timer \
+         duckdns.service duckdns.timer verificacion.service verificacion.timer; do
     sudo cp "deploy/$s" "/etc/systemd/system/$s"
 done
 sudo systemctl daemon-reload
-sudo systemctl enable --now api.service trabajador-cola.service despliegue.timer
+sudo systemctl enable --now api.service trabajador-cola.service \
+    duckdns.timer verificacion.timer despliegue.timer
 
-echo "== 8. Caddy (HTTPS con Let's Encrypt)"
+echo "== 8. DuckDNS: $DOMINIO apunta a la IP de este servidor"
+deploy/duckdns.sh
+sleep 60  # tiempo para que el cambio de DNS se propague antes de pedir el certificado
+
+echo "== 9. Agente de CloudWatch (memoria y disco; requiere el rol IAM de la instancia)"
+if ! command -v /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl >/dev/null; then
+    curl -fsSLo /tmp/cwagent.deb \
+        https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+    sudo dpkg -i /tmp/cwagent.deb
+fi
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+    -a fetch-config -m ec2 -s -c "file:$APP/deploy/cloudwatch.json"
+
+echo "== 10. Caddy (HTTPS con Let's Encrypt)"
 if ! command -v caddy >/dev/null; then
     curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
         | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
@@ -79,11 +99,12 @@ fi
 sed "s/DOMINIO/$DOMINIO/" deploy/Caddyfile | sudo tee /etc/caddy/Caddyfile >/dev/null
 sudo systemctl reload caddy || sudo systemctl restart caddy
 
-echo "== 9. Comprobación"
+echo "== 11. Comprobación"
 for i in $(seq 1 30); do
     curl -fs http://127.0.0.1:8000/ >/dev/null && break
     sleep 2
 done
 curl -fs http://127.0.0.1:8000/ && echo
-systemctl --no-pager --lines=0 status api.service trabajador-cola.service caddy despliegue.timer
+systemctl --no-pager --lines=0 status api.service trabajador-cola.service caddy \
+    amazon-cloudwatch-agent duckdns.timer verificacion.timer despliegue.timer
 echo "Listo: https://$DOMINIO/docs"
