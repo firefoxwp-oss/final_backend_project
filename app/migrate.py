@@ -31,6 +31,13 @@ _COLUMNAS = [
         "notified_at",
         "ALTER TABLE jobs ADD COLUMN notified_at TIMESTAMPTZ",
     ),
+    # Plan freemium
+    (
+        "users",
+        "plan",
+        "ALTER TABLE users ADD COLUMN plan VARCHAR(10) NOT NULL "
+        "DEFAULT 'gratuito'",
+    ),
 ]
 
 _INDICES = [
@@ -99,6 +106,7 @@ _DEFAULTS = [
 ]
 
 _CHECKS = [
+    ("users", "ck_users_plan", "CHECK (plan IN ('gratuito', 'premium'))"),
     (
         "jobs",
         "ck_jobs_status",
