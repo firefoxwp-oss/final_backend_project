@@ -1,0 +1,9 @@
+[Unit]
+Description=Actualiza el subdominio de DuckDNS con la IP del servidor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/opt/karaoke/final_backend_project/deploy/duckdns.sh

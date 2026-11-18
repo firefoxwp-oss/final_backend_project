@@ -1,0 +1,3 @@
+# Se copia como /opt/karaoke/duckdns.env (fuera del repositorio) y se completa
+DUCKDNS_SUBDOMINIO=
+DUCKDNS_TOKEN=
